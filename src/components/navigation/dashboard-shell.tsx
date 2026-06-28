@@ -112,7 +112,7 @@ export function DashboardShell({
       {/* Main column */}
       <div className={cn("transition-all duration-300", collapsed ? "lg:pl-[76px]" : "lg:pl-64")}>
         {/* Topbar */}
-        <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-3 border-b border-border bg-card/80 px-4 backdrop-blur lg:px-8">
+        <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-3 border-b border-border bg-card px-4 lg:px-8">
           <div className="flex items-center gap-2 lg:hidden">
             <div className="flex size-8 items-center justify-center rounded-lg gradient-brand text-white">
               <Icons.Home className="size-4" />
@@ -171,7 +171,7 @@ export function DashboardShell({
       </div>
 
       {/* Mobile bottom nav */}
-      <nav className="fixed inset-x-0 bottom-0 z-30 flex items-stretch justify-around border-t border-border bg-card/95 backdrop-blur lg:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-30 flex items-stretch justify-around border-t border-border bg-card lg:hidden">
         {mobileNav.map((item) => {
           const active = isActive(pathname, item.href);
           return (
