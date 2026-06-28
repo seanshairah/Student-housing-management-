@@ -144,8 +144,8 @@ Set `RESEND_API_KEY` and `EMAIL_FROM`. The email service automatically uses Rese
 ### SMTP (fallback email)
 Set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_SECURE`. If Resend fails (or isn't set), the service falls back to SMTP.
 
-### Bulk SMS
-Set `BULKSMS_API_KEY`, `BULKSMS_SENDER_ID`, `BULKSMS_BASE_URL`. The SMS layer uses a provider-adapter pattern (`src/services/sms`) — swap in Twilio/Africa's Talking/etc. by implementing the `SmsProvider` interface.
+### Bulk SMS — SMS Pop (primary)
+Set `SMSPOP_API_KEY` (create a token in the SMS Pop dashboard under **API Tokens → Create**), `SMSPOP_SENDER_ID` (an **approved** sender/brand ID on your account), and `SMSPOP_BASE_URL` (`https://smspop.co.zw/api`). The SMS layer uses a provider-adapter pattern (`src/services/sms`); SMS Pop is used automatically when configured, sending via `POST /campaigns` with Bearer auth. Phone numbers are normalised to Zimbabwe MSISDN format (e.g. `0771234567` → `263771234567`). Swap in Twilio/Africa's Talking/etc. by implementing the `SmsProvider` interface. A generic `BULKSMS_*` adapter remains available as a fallback.
 
 ### Paynow
 Set `PAYNOW_INTEGRATION_ID`, `PAYNOW_INTEGRATION_KEY`, `PAYNOW_RETURN_URL`, `PAYNOW_RESULT_URL`, and `PAYNOW_MODE=live`. The payment service (`src/services/payments`) already implements initiate/verify/return/result with the real Paynow hashing — switching from mock to live is purely env configuration. The result webhook lives at `POST /api/payments/paynow/result`.
