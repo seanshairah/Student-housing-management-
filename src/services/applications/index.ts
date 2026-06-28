@@ -1,0 +1,438 @@
+import { prisma } from "@/lib/prisma";
+import {
+  ApplicationStatus,
+  RoomStatus,
+  StudentStatus,
+  UserRole,
+  type Prisma,
+} from "@prisma/client";
+import { generateReference, formatCurrency } from "@/lib/utils";
+import { hashPassword } from "@/lib/auth";
+import { sendTemplatedEmail } from "@/services/email";
+import { sendStatusSMS } from "@/services/sms";
+import { notifyOwners, notifyDashboard } from "@/services/notifications";
+import { createInvoice } from "@/services/invoices";
+import { generatePaymentLink } from "@/services/payments";
+import { getSettings } from "@/services/numbering";
+import { EMAIL_SUBJECTS } from "@/constants/messages";
+import { audit } from "@/services/audit";
+
+export interface SubmitApplicationInput {
+  fullName: string;
+  email: string;
+  phone: string;
+  nationalId?: string;
+  age?: number;
+  gender?: string;
+  institution?: string;
+  program?: string;
+  yearOfStudy?: string;
+  houseId: string;
+  roomId?: string;
+  nextOfKinName?: string;
+  nextOfKinPhone?: string;
+  nextOfKinRelation?: string;
+  guardianName?: string;
+  guardianPhone?: string;
+  specialNotes?: string;
+  medicalNeeds?: string;
+  agreedToTerms: boolean;
+}
+
+/**
+ * Submit a public booking application.
+ * Uses a transaction with server-side checks to prevent double-booking:
+ * the selected room is re-read inside the transaction and only reserved if
+ * still available.
+ */
+export async function submitApplication(input: SubmitApplicationInput) {
+  const reference = generateReference("APP");
+
+  const application = await prisma.$transaction(
+    async (tx: Prisma.TransactionClient) => {
+      // Validate & lock the room if one was chosen.
+      if (input.roomId) {
+        const room = await tx.room.findUnique({ where: { id: input.roomId } });
+        if (!room) throw new Error("Selected room not found");
+        if (room.houseId !== input.houseId)
+          throw new Error("Room does not belong to the selected house");
+        if (
+          room.status !== RoomStatus.AVAILABLE ||
+          room.occupied >= room.capacity
+        ) {
+          throw new Error(
+            "Sorry, that room has just been taken. Please choose another room.",
+          );
+        }
+        // Reserve: mark Pending Application.
+        await tx.room.update({
+          where: { id: room.id },
+          data: { status: RoomStatus.PENDING_APPLICATION },
+        });
+      }
+
+      return tx.application.create({
+        data: {
+          reference,
+          fullName: input.fullName,
+          email: input.email,
+          phone: input.phone,
+          nationalId: input.nationalId,
+          age: input.age,
+          gender: input.gender,
+          institution: input.institution,
+          program: input.program,
+          yearOfStudy: input.yearOfStudy,
+          houseId: input.houseId,
+          roomId: input.roomId,
+          nextOfKinName: input.nextOfKinName,
+          nextOfKinPhone: input.nextOfKinPhone,
+          nextOfKinRelation: input.nextOfKinRelation,
+          guardianName: input.guardianName,
+          guardianPhone: input.guardianPhone,
+          specialNotes: input.specialNotes,
+          medicalNeeds: input.medicalNeeds,
+          agreedToTerms: input.agreedToTerms,
+          status: ApplicationStatus.AWAITING_REVIEW,
+        },
+        include: { house: true, room: true },
+      });
+    },
+  );
+
+  // ── Notifications (best-effort) ──
+  const portalUrl = `${process.env.APP_URL || ""}/auth/login`;
+  await sendTemplatedEmail(
+    application.email,
+    EMAIL_SUBJECTS.applicationReceived,
+    "applicationReceived",
+    {
+      studentName: application.fullName,
+      houseName: application.house.name,
+      roomName: application.room?.number ?? "To be assigned",
+      reference: application.reference,
+      portalUrl,
+    },
+  ).catch(() => undefined);
+
+  await sendStatusSMS(application.phone, "applicationReceived", {
+    studentName: application.fullName,
+    houseName: application.house.name,
+  }).catch(() => undefined);
+
+  const settings = await getSettings();
+  await sendTemplatedEmail(
+    settings.ownerEmail,
+    EMAIL_SUBJECTS.newApplicationAlert,
+    "newApplicationAlert",
+    {
+      studentName: application.fullName,
+      email: application.email,
+      phone: application.phone,
+      houseName: application.house.name,
+      roomName: application.room?.number ?? "—",
+      reference: application.reference,
+      reviewUrl: `${process.env.APP_URL || ""}/owner/applications/${application.id}`,
+    },
+  ).catch(() => undefined);
+
+  await notifyOwners({
+    title: "New application received",
+    body: `${application.fullName} applied for ${application.house.name}${
+      application.room ? ` (Room ${application.room.number})` : ""
+    }.`,
+    type: "application",
+    link: `/owner/applications/${application.id}`,
+    relatedType: "Application",
+    relatedId: application.id,
+  }).catch(() => undefined);
+
+  await audit({
+    actorEmail: application.email,
+    action: "application.submitted",
+    entityType: "Application",
+    entityId: application.id,
+    metadata: { reference, house: application.house.name },
+  });
+
+  return application;
+}
+
+/** Ensure a student User + profile exists for an application (used on approval). */
+async function ensureStudentProfile(
+  applicationId: string,
+  tx: Prisma.TransactionClient,
+) {
+  const app = await tx.application.findUnique({
+    where: { id: applicationId },
+  });
+  if (!app) throw new Error("Application not found");
+  if (app.studentProfileId) {
+    return tx.studentProfile.findUnique({ where: { id: app.studentProfileId } });
+  }
+
+  // Reuse an existing user by email, else create one.
+  let user = await tx.user.findUnique({ where: { email: app.email } });
+  if (!user) {
+    const tempPassword = await hashPassword("student123");
+    user = await tx.user.create({
+      data: {
+        email: app.email,
+        name: app.fullName,
+        phone: app.phone,
+        role: UserRole.STUDENT,
+        passwordHash: tempPassword,
+      },
+    });
+  }
+
+  const profile = await tx.studentProfile.upsert({
+    where: { userId: user.id },
+    update: {},
+    create: {
+      userId: user.id,
+      fullName: app.fullName,
+      email: app.email,
+      phone: app.phone,
+      nationalId: app.nationalId,
+      age: app.age,
+      gender: app.gender,
+      institution: app.institution,
+      program: app.program,
+      yearOfStudy: app.yearOfStudy,
+      houseId: app.houseId,
+      roomId: app.roomId,
+      nextOfKinName: app.nextOfKinName,
+      nextOfKinPhone: app.nextOfKinPhone,
+      nextOfKinRelation: app.nextOfKinRelation,
+      guardianName: app.guardianName,
+      guardianPhone: app.guardianPhone,
+      status: StudentStatus.APPLICANT,
+    },
+  });
+
+  await tx.application.update({
+    where: { id: applicationId },
+    data: { studentProfileId: profile.id },
+  });
+  return profile;
+}
+
+/**
+ * Approve an application: create student, reserve room, create invoice,
+ * generate payment link, and notify the student.
+ */
+export async function approveApplication(
+  applicationId: string,
+  options?: { actorId?: string; actorEmail?: string; roomId?: string; amount?: number },
+) {
+  const settings = await getSettings();
+
+  const { application, invoiceId } = await prisma.$transaction(
+    async (tx: Prisma.TransactionClient) => {
+      const app = await tx.application.findUnique({
+        where: { id: applicationId },
+        include: { house: true, room: true },
+      });
+      if (!app) throw new Error("Application not found");
+
+      const roomId = options?.roomId ?? app.roomId ?? undefined;
+      if (!roomId) throw new Error("Assign a room before approving");
+
+      const room = await tx.room.findUnique({ where: { id: roomId } });
+      if (!room) throw new Error("Room not found");
+      if (
+        room.status === RoomStatus.OCCUPIED &&
+        room.occupied >= room.capacity
+      ) {
+        throw new Error("Room is fully occupied");
+      }
+
+      const profile = await ensureStudentProfile(applicationId, tx);
+      if (!profile) throw new Error("Could not create student profile");
+
+      // Reserve the room for this student.
+      await tx.room.update({
+        where: { id: roomId },
+        data: { status: RoomStatus.RESERVED },
+      });
+      await tx.studentProfile.update({
+        where: { id: profile.id },
+        data: { roomId, houseId: app.houseId, status: StudentStatus.APPLICANT },
+      });
+
+      const amount = options?.amount ?? Number(room.price);
+      const invoice = await createInvoice(
+        {
+          studentProfileId: profile.id,
+          applicationId: app.id,
+          description: `Accommodation — ${app.house.name}, Room ${room.number}`,
+          amount,
+          dueInDays: settings.paymentTermsDays,
+        },
+        tx,
+      );
+
+      const updated = await tx.application.update({
+        where: { id: applicationId },
+        data: {
+          status: ApplicationStatus.APPROVED,
+          roomId,
+          decidedAt: new Date(),
+        },
+        include: { house: true, room: true, studentProfile: true },
+      });
+
+      return { application: updated, invoiceId: invoice.id, amount, profile };
+    },
+  );
+
+  // Generate the payment link (creates Payment + sends email/SMS).
+  const { redirectUrl } = await generatePaymentLink(invoiceId);
+
+  // Move application into payment-pending now that a link exists.
+  await prisma.application.update({
+    where: { id: applicationId },
+    data: { status: ApplicationStatus.PAYMENT_PENDING },
+  });
+
+  const amountDue = application.room ? Number(application.room.price) : 0;
+  await sendTemplatedEmail(
+    application.email,
+    EMAIL_SUBJECTS.applicationApproved,
+    "applicationApproved",
+    {
+      studentName: application.fullName,
+      houseName: application.house.name,
+      roomName: application.room?.number ?? "—",
+      amount: formatCurrency(amountDue),
+      paymentUrl: redirectUrl || `${process.env.APP_URL || ""}/student/payments`,
+    },
+  ).catch(() => undefined);
+
+  await sendStatusSMS(application.phone, "applicationApproved", {
+    studentName: application.fullName,
+    houseName: application.house.name,
+  }).catch(() => undefined);
+
+  if (application.studentProfile?.userId) {
+    await notifyDashboard({
+      userId: application.studentProfile.userId,
+      title: "Application approved 🎉",
+      body: "Complete your payment to secure your room.",
+      type: "application",
+      link: "/student/payments",
+      relatedType: "Application",
+      relatedId: applicationId,
+    }).catch(() => undefined);
+  }
+
+  await audit({
+    userId: options?.actorId,
+    actorEmail: options?.actorEmail,
+    action: "application.approved",
+    entityType: "Application",
+    entityId: applicationId,
+  });
+
+  return application;
+}
+
+/** Reject an application: free the room and notify the applicant politely. */
+export async function rejectApplication(
+  applicationId: string,
+  options?: { actorId?: string; actorEmail?: string; reason?: string },
+) {
+  const application = await prisma.$transaction(
+    async (tx: Prisma.TransactionClient) => {
+      const app = await tx.application.findUnique({
+        where: { id: applicationId },
+        include: { house: true, room: true },
+      });
+      if (!app) throw new Error("Application not found");
+
+      // Release a pending/reserved room back to available.
+      if (
+        app.roomId &&
+        app.room &&
+        (app.room.status === RoomStatus.PENDING_APPLICATION ||
+          app.room.status === RoomStatus.RESERVED)
+      ) {
+        await tx.room.update({
+          where: { id: app.roomId },
+          data: { status: RoomStatus.AVAILABLE },
+        });
+      }
+
+      return tx.application.update({
+        where: { id: applicationId },
+        data: {
+          status: ApplicationStatus.REJECTED,
+          reviewNotes: options?.reason,
+          decidedAt: new Date(),
+        },
+        include: { house: true },
+      });
+    },
+  );
+
+  await sendTemplatedEmail(
+    application.email,
+    EMAIL_SUBJECTS.applicationRejected,
+    "applicationRejected",
+    {
+      studentName: application.fullName,
+      houseName: application.house.name,
+      reason: options?.reason ?? "",
+    },
+  ).catch(() => undefined);
+
+  await sendStatusSMS(application.phone, "applicationRejected", {
+    studentName: application.fullName,
+    houseName: application.house.name,
+  }).catch(() => undefined);
+
+  await audit({
+    userId: options?.actorId,
+    actorEmail: options?.actorEmail,
+    action: "application.rejected",
+    entityType: "Application",
+    entityId: applicationId,
+    metadata: { reason: options?.reason },
+  });
+
+  return application;
+}
+
+/** Confirm move-in after payment: room becomes Occupied. */
+export async function confirmMoveIn(applicationId: string) {
+  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const app = await tx.application.findUnique({
+      where: { id: applicationId },
+    });
+    if (!app || !app.roomId || !app.studentProfileId)
+      throw new Error("Application not ready for move-in");
+
+    const room = await tx.room.findUnique({ where: { id: app.roomId } });
+    if (!room) throw new Error("Room not found");
+
+    await tx.room.update({
+      where: { id: app.roomId },
+      data: {
+        occupied: room.occupied + 1,
+        status:
+          room.occupied + 1 >= room.capacity
+            ? RoomStatus.OCCUPIED
+            : RoomStatus.AVAILABLE,
+      },
+    });
+    await tx.studentProfile.update({
+      where: { id: app.studentProfileId },
+      data: { status: StudentStatus.ACTIVE, moveInDate: new Date() },
+    });
+    return tx.application.update({
+      where: { id: applicationId },
+      data: { status: ApplicationStatus.MOVED_IN },
+    });
+  });
+}
