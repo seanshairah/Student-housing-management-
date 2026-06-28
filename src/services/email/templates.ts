@@ -7,52 +7,63 @@ interface BrandedOptions {
   ctaLabel?: string;
   ctaUrl?: string;
   footerNote?: string;
+  preheader?: string;
 }
 
 /** Wrap content in a clean, responsive branded email shell. */
 export function brandedEmail(opts: BrandedOptions): string {
   const cta =
     opts.ctaLabel && opts.ctaUrl
-      ? `<tr><td style="padding:12px 0 8px;">
-           <a href="${opts.ctaUrl}" style="display:inline-block;background:#171716;color:#ffffff;text-decoration:none;font-weight:600;padding:13px 26px;border-radius:10px;font-size:15px;letter-spacing:-0.1px;">${opts.ctaLabel}</a>
+      ? `<tr><td style="padding:24px 0 4px;">
+           <a href="${opts.ctaUrl}" style="display:inline-block;background:#171716;color:#ffffff;text-decoration:none;font-weight:600;padding:13px 28px;border-radius:10px;font-size:15px;letter-spacing:-0.1px;">${opts.ctaLabel}&nbsp;&rarr;</a>
          </td></tr>`
       : "";
-  return `<!doctype html><html><body style="margin:0;background:#faf9f7;font-family:ui-sans-serif,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#171716;">
+  const preheader = (opts.preheader ?? opts.intro).replace(/<[^>]+>/g, "");
+  return `<!doctype html><html lang="en"><head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta name="color-scheme" content="light"/>
+  <meta name="supported-color-schemes" content="light"/>
+</head><body style="margin:0;padding:0;background:#faf9f7;font-family:ui-sans-serif,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#171716;-webkit-font-smoothing:antialiased;">
+  <span style="display:none!important;visibility:hidden;opacity:0;height:0;width:0;overflow:hidden;mso-hide:all;">${preheader}</span>
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#faf9f7;padding:40px 16px;">
     <tr><td align="center">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:540px;background:#ffffff;border:1px solid #ececeb;border-radius:16px;overflow:hidden;">
-        <tr><td style="padding:30px 36px 0;">
-          <div style="display:inline-flex;align-items:center;gap:9px;">
-            <span style="display:inline-block;width:26px;height:26px;border-radius:7px;background:#171716;"></span>
-            <span style="font-size:16px;font-weight:700;letter-spacing:-0.2px;color:#171716;">Student Housing</span>
-          </div>
+        <tr><td style="padding:26px 36px;border-bottom:1px solid #f0efed;">
+          <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+            <td style="vertical-align:middle;"><span style="display:inline-block;width:26px;height:26px;border-radius:7px;background:#171716;"></span></td>
+            <td style="vertical-align:middle;padding-left:10px;"><span style="font-size:16px;font-weight:700;letter-spacing:-0.2px;color:#171716;">Student Housing</span></td>
+          </tr></table>
         </td></tr>
-        <tr><td style="padding:26px 36px 8px;">
-          <h1 style="margin:0 0 12px;font-size:23px;line-height:1.3;font-weight:700;letter-spacing:-0.4px;color:#171716;">${opts.heading}</h1>
-          <p style="margin:0 0 18px;font-size:15px;line-height:1.65;color:#52524d;">${opts.intro}</p>
+        <tr><td style="padding:32px 36px 8px;">
+          <h1 style="margin:0 0 12px;font-size:22px;line-height:1.35;font-weight:700;letter-spacing:-0.4px;color:#171716;">${opts.heading}</h1>
+          <p style="margin:0 0 4px;font-size:15px;line-height:1.65;color:#52524d;">${opts.intro}</p>
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-            <tr><td style="font-size:15px;line-height:1.65;color:#52524d;">${opts.bodyHtml}</td></tr>
+            <tr><td style="padding-top:14px;font-size:15px;line-height:1.65;color:#52524d;">${opts.bodyHtml}</td></tr>
             ${cta}
           </table>
         </td></tr>
-        <tr><td style="padding:24px 36px 30px;">
-          <div style="border-top:1px solid #ececeb;padding-top:18px;">
-            <p style="margin:0;font-size:12px;line-height:1.6;color:#a3a39d;">${opts.footerNote ?? "This is an automated message from the Student Housing platform. You're receiving it because you have an application or account with us."}</p>
+        <tr><td style="padding:28px 36px 30px;">
+          <div style="border-top:1px solid #f0efed;padding-top:20px;">
+            <p style="margin:0 0 6px;font-size:13px;line-height:1.6;color:#6e6e68;">Questions? Just reply to this email &mdash; we're happy to help.</p>
+            <p style="margin:0;font-size:12px;line-height:1.6;color:#a3a39d;">${opts.footerNote ?? "Automated message from the Student Housing platform. You're receiving it because you have an application or account with us."}</p>
           </div>
         </td></tr>
       </table>
-      <p style="margin:18px 0 0;font-size:11px;color:#b8b8b3;">Student Housing · Mufudzi House &amp; Siphiwe House</p>
+      <p style="margin:18px 0 0;font-size:11px;color:#b8b8b3;letter-spacing:0.02em;">Student Housing &middot; Mufudzi House &amp; Siphiwe House</p>
     </td></tr>
-  </table></body></html>`;
+  </table>
+</body></html>`;
 }
 
-function row(label: string, value: string): string {
-  return `<tr><td style="padding:7px 0;color:#a3a39d;font-size:13px;width:44%;">${label}</td><td style="padding:7px 0;color:#171716;font-size:14px;font-weight:600;text-align:right;">${value}</td></tr>`;
+function row(label: string, value: string, last: boolean): string {
+  const border = last ? "" : "border-bottom:1px solid #f0efed;";
+  return `<tr><td style="padding:11px 0;${border}color:#8c8c86;font-size:13px;width:46%;vertical-align:top;">${label}</td><td style="padding:11px 0;${border}color:#171716;font-size:14px;font-weight:600;text-align:right;vertical-align:top;">${value}</td></tr>`;
 }
 
 export function detailTable(rows: [string, string][]): string {
-  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:8px 0 18px;background:#faf9f7;border:1px solid #ececeb;border-radius:12px;padding:10px 16px;">${rows
-    .map(([l, v]) => row(l, v))
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0;background:#faf9f7;border:1px solid #ececeb;border-radius:12px;padding:2px 18px;">${rows
+    .map(([l, v], i) => row(l, v, i === rows.length - 1))
     .join("")}</table>`;
 }
 
@@ -72,7 +83,8 @@ export const emailTemplates = {
           ["Room", String(d.roomName || "To be assigned")],
           ["Status", "Awaiting review"],
         ],
-      )}<br/>You'll be notified by <strong>email and SMS</strong> as soon as your application has been reviewed. There's nothing more you need to do for now.`,
+      )}You'll be notified by <strong>email and SMS</strong> as soon as your application has been reviewed. There's nothing more you need to do for now.`,
+      preheader: "Your application is in — we'll review it and be in touch shortly.",
     }),
 
   newApplicationAlert: (d: TemplateData) =>
@@ -95,20 +107,20 @@ export const emailTemplates = {
     brandedEmail({
       heading: "Your application is approved! 🎉",
       intro: `Great news ${d.studentName} — your application for ${d.houseName} has been approved and your student portal account is ready.`,
-      bodyHtml: `Use the login details below to sign in to your student portal. Once you sign in, you'll be asked to <strong>pay your rent of ${d.amount}</strong> to activate your account — after that you'll have full access to your dashboard. ${detailTable(
+      bodyHtml: `Use the login details below to sign in to your student portal. Once you're in, you'll be asked to <strong>pay your rent of ${d.amount}</strong> to activate your account — after that you'll have full access to your dashboard. ${detailTable(
         [
           ["House", String(d.houseName)],
           ["Room", String(d.roomName || "—")],
           ["Rent due", String(d.amount)],
         ],
       )}
-      <div style="margin:4px 0 16px;border:1px solid #e2d2bf;border-radius:12px;padding:14px 16px;background:#faf6f1;">
-        <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#a87c55;letter-spacing:0.02em;text-transform:uppercase;">Your login credentials</p>
-        ${detailTable([
-          ["Login email", String(d.email)],
-          ["Temporary password", String(d.password)],
-        ])}
-        <p style="margin:0;font-size:12px;color:#8a978f;">For your security, you can change this password after signing in.</p>
+      <div style="margin:18px 0 4px;border:1px solid #e6d9c6;border-radius:12px;padding:16px 18px;background:#faf6f1;">
+        <p style="margin:0 0 12px;font-size:12px;font-weight:700;color:#a87c55;letter-spacing:0.05em;text-transform:uppercase;">Your login credentials</p>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+          <tr><td style="padding:5px 0;color:#8c8c86;font-size:13px;">Email</td><td style="padding:5px 0;text-align:right;font-size:14px;font-weight:600;color:#171716;">${d.email}</td></tr>
+          <tr><td style="padding:5px 0;color:#8c8c86;font-size:13px;">Temporary password</td><td style="padding:5px 0;text-align:right;"><span style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:14px;font-weight:700;color:#171716;background:#ffffff;border:1px solid #e6d9c6;border-radius:6px;padding:3px 9px;">${d.password}</span></td></tr>
+        </table>
+        <p style="margin:12px 0 0;font-size:12px;line-height:1.5;color:#a3a39d;">You can change this password once you've signed in.</p>
       </div>`,
       ctaLabel: "Sign in & pay rent",
       ctaUrl: String(d.loginUrl || "#"),
