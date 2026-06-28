@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/session";
 import { settlePayment } from "@/services/payments";
+import { requestRenewal } from "@/services/applications";
 import { notifyOwners } from "@/services/notifications";
 import { generateReference } from "@/lib/utils";
 import { serviceRequestSchema } from "@/lib/validators";
@@ -18,6 +19,36 @@ type ActionResult = { success: boolean; error?: string };
 
 async function getProfile(userId: string) {
   return prisma.studentProfile.findUnique({ where: { userId } });
+}
+
+/** Request to renew / extend the stay for the coming term. */
+export async function requestRenewalAction(
+  formData: FormData,
+): Promise<ActionResult> {
+  const session = await requireRole("STUDENT");
+  try {
+    const profile = await getProfile(session.userId);
+    if (!profile) throw new Error("Student profile not found");
+    if (!profile.roomId) {
+      throw new Error("You don't have an active room to renew yet.");
+    }
+    const roomId = String(formData.get("roomId") || profile.roomId);
+    const requestedTerm = String(formData.get("requestedTerm") || "").trim();
+    if (!requestedTerm) throw new Error("Please enter the term you're renewing for.");
+    const notes = String(formData.get("notes") || "").trim() || undefined;
+
+    await requestRenewal({
+      studentProfileId: profile.id,
+      roomId,
+      requestedTerm,
+      notes,
+    });
+    revalidatePath("/student/room");
+    revalidatePath("/student");
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: (e as Error).message };
+  }
 }
 
 /** Mock "Pay now" — settle the payment immediately (idempotent). */

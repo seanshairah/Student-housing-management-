@@ -6,7 +6,7 @@ import { Search, ArrowRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { StatusBadge } from "@/components/ui/badge";
+import { StatusBadge, Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/misc";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -28,6 +28,7 @@ export interface ApplicationRow {
   roomNumber: string | null;
   status: string;
   createdAt: string;
+  type?: string;
 }
 
 const TABS: { value: string; label: string; statuses?: string[] }[] = [
@@ -96,7 +97,16 @@ export function ApplicationsTable({ applications }: { applications: ApplicationR
               {filtered.map((a) => (
                 <TableRow key={a.id}>
                   <TableCell className="font-mono text-xs">{a.reference}</TableCell>
-                  <TableCell className="font-medium">{a.fullName}</TableCell>
+                  <TableCell className="font-medium">
+                    <span className="flex items-center gap-2">
+                      {a.fullName}
+                      {a.type === "RENEWAL" && (
+                        <Badge color="blue" className="text-[10px]">
+                          Renewal
+                        </Badge>
+                      )}
+                    </span>
+                  </TableCell>
                   <TableCell className="text-muted-foreground">{a.houseName}</TableCell>
                   <TableCell className="text-muted-foreground">{a.roomNumber ?? "—"}</TableCell>
                   <TableCell>

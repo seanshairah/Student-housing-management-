@@ -15,6 +15,10 @@ export const SMS_TEMPLATES = {
     "Hi {{studentName}}, this is a friendly reminder that you have an outstanding balance of {{amount}} for {{houseName}}. Please settle it via your portal.",
   movedIn:
     "Hi {{studentName}}, welcome to {{houseName}}! Your room {{roomNumber}} is ready. Enjoy your stay.",
+  renewalReceived:
+    "Hi {{studentName}}, we've received your request to renew your stay at {{houseName}} for {{term}}. It's awaiting review — we'll notify you by email and SMS shortly.",
+  renewalApproved:
+    "Hi {{studentName}}, your renewal for {{houseName}} ({{term}}) is APPROVED. Sign in to your student portal and pay {{amount}} to confirm your room for the new term.",
 } as const;
 
 export const EMAIL_SUBJECTS = {
@@ -29,4 +33,6 @@ export const EMAIL_SUBJECTS = {
   statement: "Your account statement",
   announcement: "{{title}}",
   serviceUpdate: "Service update: {{title}}",
+  renewalReceived: "We've received your renewal request",
+  renewalApproved: "Your stay renewal is approved 🎉",
 } as const;
