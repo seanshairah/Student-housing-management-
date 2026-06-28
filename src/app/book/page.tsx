@@ -54,13 +54,13 @@ export default async function BookPage({
       <section className="container py-12 sm:py-16">
         <div className="mx-auto max-w-2xl">
           <div className="text-center">
-            <p className="text-sm font-semibold uppercase tracking-wide text-brand-600">
+            <p className="text-xs uppercase tracking-wider text-muted-foreground">
               Apply online
             </p>
-            <h1 className="mt-2 font-display text-3xl font-bold tracking-tight sm:text-4xl">
+            <h1 className="mt-3 font-display text-4xl font-light tracking-tight sm:text-5xl">
               Book your room
             </h1>
-            <p className="mt-3 text-muted-foreground">
+            <p className="mt-4 text-muted-foreground">
               It takes a few minutes. Your room is held while we review — you
               pay only after approval.
             </p>

@@ -16,6 +16,7 @@ export interface SeedHouse {
   description: string;
   location: string;
   imageUrl: string;
+  images: string[];
   amenities: string[];
   services: string[];
   rules: string[];
@@ -32,7 +33,14 @@ export const seedHouses: SeedHouse[] = [
       "Mufudzi House is a warm, modern residence designed for students who want a quiet place to focus and a friendly community to belong to. Spacious rooms, fast Wi-Fi, and on-site care make it an easy place to call home.",
     location: "12 Acacia Avenue, Mount Pleasant (placeholder location)",
     imageUrl:
-      "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=1200&q=80",
+      "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=1400&q=80",
+    images: [
+      "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=1400&q=80",
+      "https://images.unsplash.com/photo-1493809842364-78817add7ffb?auto=format&fit=crop&w=1400&q=80",
+      "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=1400&q=80",
+      "https://images.unsplash.com/photo-1556911220-bff31c812dba?auto=format&fit=crop&w=1400&q=80",
+      "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=1400&q=80",
+    ],
     amenities: [
       "High-speed Wi-Fi",
       "Backup power",
@@ -83,7 +91,14 @@ export const seedHouses: SeedHouse[] = [
       "Siphiwe House blends comfort and convenience for ambitious students. With generous communal areas, reliable utilities, and a caring management team, it's a residence built for studying well and living well.",
     location: "5 Jacaranda Close, Avondale (placeholder location)",
     imageUrl:
-      "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=1200&q=80",
+      "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=1400&q=80",
+    images: [
+      "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=1400&q=80",
+      "https://images.unsplash.com/photo-1560185007-cde436f6a4d0?auto=format&fit=crop&w=1400&q=80",
+      "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=1400&q=80",
+      "https://images.unsplash.com/photo-1484154218962-a197022b5858?auto=format&fit=crop&w=1400&q=80",
+      "https://images.unsplash.com/photo-1567767292278-a4f21aa2d36e?auto=format&fit=crop&w=1400&q=80",
+    ],
     amenities: [
       "Fibre Wi-Fi",
       "Solar backup power",

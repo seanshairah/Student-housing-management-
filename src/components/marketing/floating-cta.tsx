@@ -2,10 +2,10 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { CalendarCheck } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-/** Mobile-only floating "Book a Room" button, bottom-right. Hides on scroll up. */
+/** Mobile-only floating "Book a room" button, bottom-center. Hides on scroll up. */
 export function FloatingBookCta() {
   const [visible, setVisible] = React.useState(true);
   const lastY = React.useRef(0);
@@ -26,16 +26,16 @@ export function FloatingBookCta() {
   return (
     <Link
       href="/book"
-      aria-label="Book a Room"
+      aria-label="Book a room"
       className={cn(
-        "fixed bottom-5 right-5 z-40 flex items-center gap-2 rounded-full gradient-brand px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-900/20 transition-all duration-300 lg:hidden",
+        "fixed inset-x-4 bottom-5 z-40 flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-3.5 text-sm font-semibold text-primary-foreground shadow-lg shadow-brand-900/20 transition-all duration-300 lg:hidden",
         visible
           ? "translate-y-0 opacity-100"
           : "pointer-events-none translate-y-24 opacity-0",
       )}
     >
-      <CalendarCheck className="size-4" />
-      Book a Room
+      Book a room
+      <ArrowRight className="size-4" />
     </Link>
   );
 }

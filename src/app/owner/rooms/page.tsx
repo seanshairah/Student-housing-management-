@@ -33,6 +33,7 @@ export default async function OwnerRoomsPage({
     status: r.status,
     floor: r.floor,
     description: r.description,
+    images: r.images,
   }));
 
   return (

@@ -9,7 +9,6 @@ import {
   getApplicationsByStatus,
 } from "@/services/reports";
 import { formatCurrency, formatDate, toNumber } from "@/lib/utils";
-import { PageHeader } from "@/components/dashboard/page-header";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import {
@@ -34,7 +33,17 @@ import {
 } from "@/constants";
 
 export default async function OwnerOverviewPage() {
-  await requireRole("OWNER");
+  const session = await requireRole("OWNER");
+  const now = new Date();
+  const hour = now.getHours();
+  const greeting =
+    hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  const firstName = session.name.split(" ")[0];
+  const longDate = new Intl.DateTimeFormat("en-GB", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(now);
 
   const [stats, revenue, occupancy, appsByStatus] = await Promise.all([
     getOverviewStats(),
@@ -64,17 +73,44 @@ export default async function OwnerOverviewPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Overview"
-        description="Your portfolio at a glance — occupancy, revenue and pending actions."
-      >
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-sm text-muted-foreground">{longDate}</p>
+          <h1 className="mt-1 font-display text-3xl font-bold tracking-tight">
+            {greeting}, {firstName}
+          </h1>
+          <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-sm text-muted-foreground">
+            <span>
+              <strong className="font-semibold text-foreground">
+                {stats.totalStudents}
+              </strong>{" "}
+              students
+            </span>
+            <span className="hidden h-3 w-px bg-border sm:block" />
+            <span>
+              <strong className="font-semibold text-foreground">
+                {stats.occupancyRate}%
+              </strong>{" "}
+              occupancy
+            </span>
+            <span className="hidden h-3 w-px bg-border sm:block" />
+            <span>
+              <strong className="font-semibold text-foreground">
+                {stats.pendingApplications}
+              </strong>{" "}
+              pending review
+            </span>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
         <Button asChild variant="outline" size="sm">
           <Link href="/owner/reports">View reports</Link>
         </Button>
         <Button asChild size="sm">
           <Link href="/owner/applications">Review applications</Link>
         </Button>
-      </PageHeader>
+        </div>
+      </div>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard label="Total students" value={stats.totalStudents} icon="Users" accent="brand" hint={`${stats.activeStudents} active`} />

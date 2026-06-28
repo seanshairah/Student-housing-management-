@@ -262,12 +262,20 @@ export function BookingForm({
           )}
 
           {step < STEPS.length - 1 ? (
-            <Button type="button" variant="brand" onClick={next}>
+            <Button
+              type="button"
+              className="rounded-full"
+              onClick={next}
+            >
               Continue
               <ChevronRight className="size-4" />
             </Button>
           ) : (
-            <Button type="submit" variant="brand" disabled={submitting}>
+            <Button
+              type="submit"
+              className="rounded-full"
+              disabled={submitting}
+            >
               {submitting ? (
                 <>
                   <Loader2 className="size-4 animate-spin" />
@@ -301,8 +309,8 @@ function Stepper({ step }: { step: number }) {
               <span
                 className={cn(
                   "grid size-8 shrink-0 place-items-center rounded-full text-xs font-bold transition-colors",
-                  done && "gradient-brand text-white",
-                  active && "bg-brand-600 text-white ring-4 ring-brand-100",
+                  done && "bg-primary text-primary-foreground",
+                  active && "bg-primary text-primary-foreground ring-4 ring-brand-100",
                   !done && !active && "bg-muted text-muted-foreground",
                 )}
               >
@@ -321,7 +329,7 @@ function Stepper({ step }: { step: number }) {
               <span
                 className={cn(
                   "h-px flex-1 transition-colors",
-                  i < step ? "bg-brand-500" : "bg-border",
+                  i < step ? "bg-foreground" : "bg-border",
                 )}
               />
             )}
@@ -575,8 +583,8 @@ function StepAcademic({
                   className={cn(
                     "flex items-start justify-between gap-3 rounded-2xl border p-4 text-left transition-colors",
                     selected
-                      ? "border-brand-500 bg-brand-50 ring-2 ring-brand-200"
-                      : "border-border bg-card hover:border-brand-300",
+                      ? "border-foreground bg-brand-50 ring-1 ring-foreground"
+                      : "border-border bg-card hover:border-brand-400",
                   )}
                 >
                   <div>
@@ -585,7 +593,7 @@ function StepAcademic({
                       {ROOM_TYPE_LABELS[room.type] ?? room.type}
                       {room.floor ? ` · ${room.floor} floor` : ""}
                     </p>
-                    <p className="mt-1 font-display text-base font-bold text-brand-700">
+                    <p className="mt-1 font-display text-base font-bold">
                       {formatCurrency(room.price)}
                       <span className="text-xs font-normal text-muted-foreground">
                         {" "}
@@ -597,7 +605,7 @@ function StepAcademic({
                     className={cn(
                       "grid size-6 shrink-0 place-items-center rounded-full border transition-colors",
                       selected
-                        ? "border-brand-500 bg-brand-500 text-white"
+                        ? "border-foreground bg-foreground text-background"
                         : "border-border text-transparent",
                     )}
                   >
@@ -769,7 +777,7 @@ function SuccessState({
           damping: 14,
           delay: 0.1,
         }}
-        className="mx-auto grid size-16 place-items-center rounded-full gradient-brand text-white shadow-lg"
+        className="mx-auto grid size-16 place-items-center rounded-full bg-primary text-primary-foreground shadow-lg"
       >
         <CheckCircle2 className="size-9" />
       </motion.span>
@@ -786,19 +794,19 @@ function SuccessState({
         <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Your reference
         </span>
-        <span className="mt-1 font-display text-xl font-bold text-brand-700">
+        <span className="mt-1 font-display text-xl font-bold">
           {reference}
         </span>
       </div>
 
       <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-        <Button asChild variant="brand">
+        <Button asChild className="rounded-full">
           <Link href="/auth/login">
             Go to login
             <ArrowRight className="size-4" />
           </Link>
         </Button>
-        <Button asChild variant="outline">
+        <Button asChild variant="outline" className="rounded-full">
           <Link href="/">
             <HomeIcon className="size-4" />
             Back home

@@ -15,8 +15,8 @@ import {
   YAxis,
 } from "recharts";
 
-const BRAND = "#157857";
-const PALETTE = ["#157857", "#23956d", "#46b189", "#7accac", "#c19a6b", "#e4d4bf"];
+const BRAND = "#171716";
+const PALETTE = ["#171716", "#52524d", "#8f8f89", "#b8946d", "#d9d9d6", "#a87c55"];
 
 export function RevenueAreaChart({
   data,
@@ -64,7 +64,7 @@ export function OccupancyBarChart({
         <YAxis tickLine={false} axisLine={false} fontSize={12} stroke="#8a978f" width={32} />
         <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid #eef0ef", fontSize: 13 }} />
         <Bar dataKey="occupied" stackId="a" fill={BRAND} radius={[0, 0, 0, 0]} name="Occupied" />
-        <Bar dataKey="available" stackId="a" fill="#c19a6b" radius={[6, 6, 0, 0]} name="Available" />
+        <Bar dataKey="available" stackId="a" fill="#d9d9d6" radius={[6, 6, 0, 0]} name="Available" />
       </BarChart>
     </ResponsiveContainer>
   );

@@ -44,12 +44,16 @@ export async function updateHouse(formData: FormData): Promise<ActionResult> {
   try {
     const id = String(formData.get("id") || "");
     if (!id) throw new Error("Missing house id");
-    await prisma.house.update({
+    const imageUrl = String(formData.get("imageUrl") || "").trim();
+    const images = toList(formData.get("images"));
+    const house = await prisma.house.update({
       where: { id },
       data: {
         tagline: String(formData.get("tagline") || "") || null,
         description: String(formData.get("description") || ""),
         location: String(formData.get("location") || ""),
+        imageUrl: imageUrl || images[0] || null,
+        images,
         amenities: toList(formData.get("amenities")),
         services: toList(formData.get("services")),
         rules: toList(formData.get("rules")),
@@ -58,6 +62,9 @@ export async function updateHouse(formData: FormData): Promise<ActionResult> {
     });
     await audit({ action: "house.updated", entityType: "House", entityId: id });
     revalidatePath("/owner/houses");
+    revalidatePath("/houses");
+    revalidatePath(`/houses/${house.slug}`);
+    revalidatePath("/");
     return { success: true };
   } catch (e) {
     return { success: false, error: (e as Error).message };
@@ -91,6 +98,7 @@ export async function createRoom(formData: FormData): Promise<ActionResult> {
         status: parsed.status,
         floor: parsed.floor || null,
         description: parsed.description || null,
+        images: toList(formData.get("images")),
       },
     });
     await audit({ action: "room.created", entityType: "Room", entityId: room.id });
@@ -129,10 +137,12 @@ export async function updateRoom(formData: FormData): Promise<ActionResult> {
         status: parsed.status,
         floor: parsed.floor || null,
         description: parsed.description || null,
+        images: toList(formData.get("images")),
       },
     });
     await audit({ action: "room.updated", entityType: "Room", entityId: id });
     revalidatePath("/owner/rooms");
+    revalidatePath("/houses");
     return { success: true };
   } catch (e) {
     return { success: false, error: (e as Error).message };

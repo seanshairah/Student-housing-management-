@@ -43,6 +43,7 @@ export interface RoomRow {
   status: string;
   floor: string | null;
   description: string | null;
+  images?: string[];
 }
 
 const STATUSES = Object.keys(ROOM_STATUS_META);

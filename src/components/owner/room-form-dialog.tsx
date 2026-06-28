@@ -39,6 +39,7 @@ export interface RoomFormData {
   status: string;
   floor: string | null;
   description: string | null;
+  images?: string[];
 }
 
 export function RoomFormDialog({
@@ -124,6 +125,19 @@ export function RoomFormDialog({
           <div className="space-y-1.5">
             <Label htmlFor="description">Description (optional)</Label>
             <Textarea id="description" name="description" rows={2} defaultValue={room?.description ?? ""} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="images">Room photos (optional)</Label>
+            <Textarea
+              id="images"
+              name="images"
+              rows={3}
+              placeholder="One image URL per line"
+              defaultValue={room?.images?.join("\n") ?? ""}
+            />
+            <p className="text-xs text-muted-foreground">
+              One image URL per line — shown in the room gallery.
+            </p>
           </div>
           <DialogFooter>
             <DialogClose asChild>

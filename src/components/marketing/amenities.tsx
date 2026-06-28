@@ -37,7 +37,7 @@ const ITEMS = [
   {
     icon: Sparkles,
     title: "Cleaning service",
-    description: "Regular cleaning of shared spaces so you can focus on studying.",
+    description: "Regular cleaning of shared spaces so you can focus on study.",
   },
   {
     icon: Wrench,
@@ -58,21 +58,21 @@ const ITEMS = [
 
 export function Amenities() {
   return (
-    <section className="container py-20">
+    <section className="container py-20 sm:py-28">
       <motion.div
         variants={fadeUp}
         initial="hidden"
         whileInView="show"
         viewport={revealViewport}
-        className="mx-auto max-w-2xl text-center"
+        className="max-w-2xl"
       >
-        <p className="text-sm font-semibold uppercase tracking-wide text-brand-600">
-          Amenities &amp; Services
+        <p className="text-xs uppercase tracking-wider text-muted-foreground">
+          Amenities &amp; services
         </p>
-        <h2 className="mt-2 font-display text-3xl font-bold tracking-tight sm:text-4xl">
-          Everything a student needs
+        <h2 className="mt-3 font-display text-4xl font-light tracking-tight sm:text-5xl">
+          Everything a student needs.
         </h2>
-        <p className="mt-3 text-muted-foreground">
+        <p className="mt-4 text-muted-foreground">
           Comfort, reliability, and care included with every room.
         </p>
       </motion.div>
@@ -82,7 +82,7 @@ export function Amenities() {
         initial="hidden"
         whileInView="show"
         viewport={revealViewport}
-        className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4"
+        className="mt-12 grid gap-px overflow-hidden rounded-2xl border border-border bg-border sm:grid-cols-2 lg:grid-cols-4"
       >
         {ITEMS.map((item) => {
           const Icon = item.icon;
@@ -90,12 +90,10 @@ export function Amenities() {
             <motion.div
               key={item.title}
               variants={fadeUp}
-              className="group rounded-2xl border border-border bg-card p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-brand-200 hover:shadow-md"
+              className="bg-card p-6 transition-colors hover:bg-brand-50/60"
             >
-              <span className="grid size-11 place-items-center rounded-xl bg-brand-50 text-brand-600 transition-colors group-hover:gradient-brand group-hover:text-white">
-                <Icon className="size-5" />
-              </span>
-              <h3 className="mt-4 font-display text-base font-semibold">
+              <Icon className="size-5 text-foreground" strokeWidth={1.5} />
+              <h3 className="mt-4 font-display text-base font-medium">
                 {item.title}
               </h3>
               <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">

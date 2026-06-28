@@ -157,6 +157,7 @@ model House {
   description String   @db.Text
   location    String
   imageUrl    String?
+  images      String[] @default([])
   amenities   String[]
   services    String[]
   rules       String[]
@@ -186,6 +187,7 @@ model Room {
   floor       String?
   description String?
   amenities   String[]
+  images      String[]   @default([])
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 

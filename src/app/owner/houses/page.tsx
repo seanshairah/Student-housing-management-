@@ -65,6 +65,8 @@ export default async function OwnerHousesPage() {
                       tagline: h.tagline,
                       description: h.description,
                       location: h.location,
+                      imageUrl: h.imageUrl,
+                      images: h.images,
                       amenities: h.amenities,
                       services: h.services,
                       rules: h.rules,
