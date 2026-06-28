@@ -8,23 +8,23 @@ function docShell(title: string, inner: string): string {
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>${title}</title>
 <style>
-  :root{--brand:#157857}
+  :root{--brand:#171716}
   *{box-sizing:border-box}
-  body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#0f3f31;margin:0;background:#f4f6f5;padding:24px}
-  .sheet{max-width:760px;margin:0 auto;background:#fff;border-radius:16px;box-shadow:0 1px 4px rgba(0,0,0,.08);overflow:hidden}
+  body{font-family:ui-sans-serif,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#171716;margin:0;background:#faf9f7;padding:24px}
+  .sheet{max-width:760px;margin:0 auto;background:#fff;border:1px solid #ececeb;border-radius:16px;overflow:hidden}
   .top{background:var(--brand);color:#fff;padding:28px 32px;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px}
-  .top h1{margin:0;font-size:22px} .top .doc{text-align:right}
+  .top h1{margin:0;font-size:22px;letter-spacing:-0.3px} .top .doc{text-align:right}
   .body{padding:28px 32px}
-  .muted{color:#8a978f;font-size:13px}
+  .muted{color:#a3a39d;font-size:13px}
   .grid{display:flex;gap:32px;flex-wrap:wrap;margin:8px 0 20px}
   .grid>div{min-width:180px}
   table{width:100%;border-collapse:collapse;margin-top:12px;font-size:14px}
-  th{text-align:left;color:#8a978f;font-size:12px;text-transform:uppercase;padding:8px;border-bottom:2px solid #eef0ef}
-  td{padding:10px 8px;border-bottom:1px solid #eef0ef}
+  th{text-align:left;color:#a3a39d;font-size:12px;text-transform:uppercase;padding:8px;border-bottom:2px solid #ececeb}
+  td{padding:10px 8px;border-bottom:1px solid #ececeb}
   .right{text-align:right} .total{font-weight:700;font-size:16px}
-  .pill{display:inline-block;padding:3px 10px;border-radius:999px;background:#d6f0e6;color:#126047;font-size:12px;font-weight:600}
+  .pill{display:inline-block;padding:3px 12px;border-radius:999px;background:#f1e9df;color:#a87c55;font-size:12px;font-weight:600}
   .actions{max-width:760px;margin:16px auto 0;text-align:center}
-  .btn{display:inline-block;background:var(--brand);color:#fff;text-decoration:none;padding:10px 20px;border-radius:10px;font-weight:600;border:0;cursor:pointer;font-size:14px}
+  .btn{display:inline-block;background:var(--brand);color:#fff;text-decoration:none;padding:10px 22px;border-radius:10px;font-weight:600;border:0;cursor:pointer;font-size:14px}
   @media print{body{background:#fff;padding:0}.sheet{box-shadow:none}.actions{display:none}}
 </style></head><body>
 <div class="sheet">${inner}</div>

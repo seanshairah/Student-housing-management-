@@ -24,6 +24,8 @@ export interface HouseEditData {
   tagline: string | null;
   description: string;
   location: string;
+  imageUrl: string | null;
+  images: string[];
   amenities: string[];
   services: string[];
   rules: string[];
@@ -73,6 +75,29 @@ export function HouseEditDialog({ house }: { house: HouseEditData }) {
           <div className="space-y-1.5">
             <Label htmlFor="description">Description</Label>
             <Textarea id="description" name="description" rows={3} defaultValue={house.description} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="imageUrl">Cover image URL</Label>
+            <Input
+              id="imageUrl"
+              name="imageUrl"
+              placeholder="https://…"
+              defaultValue={house.imageUrl ?? ""}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="images">Gallery images</Label>
+            <Textarea
+              id="images"
+              name="images"
+              rows={4}
+              placeholder="One image URL per line"
+              defaultValue={house.images.join("\n")}
+            />
+            <p className="text-xs text-muted-foreground">
+              One image URL per line. These appear in the public house gallery.
+              The first image is used as the cover if none is set above.
+            </p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">

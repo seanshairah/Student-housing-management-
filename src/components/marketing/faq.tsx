@@ -12,41 +12,45 @@ import { fadeUp, revealViewport } from "@/lib/animation-config";
 
 export function Faq() {
   return (
-    <section id="faqs" className="container scroll-mt-20 py-20">
-      <motion.div
-        variants={fadeUp}
-        initial="hidden"
-        whileInView="show"
-        viewport={revealViewport}
-        className="mx-auto max-w-2xl text-center"
-      >
-        <p className="text-sm font-semibold uppercase tracking-wide text-brand-600">
-          FAQs
-        </p>
-        <h2 className="mt-2 font-display text-3xl font-bold tracking-tight sm:text-4xl">
-          Questions, answered
-        </h2>
-        <p className="mt-3 text-muted-foreground">
-          Everything you need to know before you book.
-        </p>
-      </motion.div>
+    <section
+      id="faqs"
+      className="border-t border-border scroll-mt-24 py-20 sm:py-28"
+    >
+      <div className="container grid gap-12 lg:grid-cols-[1fr_1.4fr]">
+        <motion.div
+          variants={fadeUp}
+          initial="hidden"
+          whileInView="show"
+          viewport={revealViewport}
+          className="lg:sticky lg:top-28 lg:self-start"
+        >
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">
+            FAQs
+          </p>
+          <h2 className="mt-3 font-display text-4xl font-light tracking-tight sm:text-5xl">
+            Questions, answered.
+          </h2>
+          <p className="mt-4 max-w-sm text-muted-foreground">
+            Everything you need to know before you book.
+          </p>
+        </motion.div>
 
-      <motion.div
-        variants={fadeUp}
-        initial="hidden"
-        whileInView="show"
-        viewport={revealViewport}
-        className="mx-auto mt-10 max-w-2xl"
-      >
-        <Accordion type="single" collapsible className="space-y-3">
-          {faqs.map((item, i) => (
-            <AccordionItem key={i} value={`item-${i}`}>
-              <AccordionTrigger>{item.q}</AccordionTrigger>
-              <AccordionContent>{item.a}</AccordionContent>
-            </AccordionItem>
-          ))}
-        </Accordion>
-      </motion.div>
+        <motion.div
+          variants={fadeUp}
+          initial="hidden"
+          whileInView="show"
+          viewport={revealViewport}
+        >
+          <Accordion type="single" collapsible className="space-y-3">
+            {faqs.map((item, i) => (
+              <AccordionItem key={i} value={`item-${i}`}>
+                <AccordionTrigger>{item.q}</AccordionTrigger>
+                <AccordionContent>{item.a}</AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        </motion.div>
+      </div>
     </section>
   );
 }

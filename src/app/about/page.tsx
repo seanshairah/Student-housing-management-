@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import Image from "next/image";
 import {
   ShieldCheck,
   HeartHandshake,
@@ -15,6 +16,9 @@ export const metadata: Metadata = {
   description:
     "About our student accommodation system — how Mufudzi and Siphiwe House are run, and the standard of care behind every room.",
 };
+
+const ABOUT_IMG =
+  "https://images.unsplash.com/photo-1567496898669-ee935f5f647a?auto=format&fit=crop&w=1400&q=80";
 
 const VALUES = [
   {
@@ -46,46 +50,48 @@ const VALUES = [
 export default function AboutPage() {
   return (
     <SiteShell>
-      <section className="relative overflow-hidden">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -right-24 -top-24 -z-10 size-[28rem] rounded-full bg-brand-200/40 blur-3xl"
-        />
-        <div className="container py-16 sm:py-24">
-          <div className="mx-auto max-w-3xl">
-            <p className="text-sm font-semibold uppercase tracking-wide text-brand-600">
-              About us
-            </p>
-            <h1 className="mt-3 text-balance font-display text-4xl font-bold leading-tight tracking-tight sm:text-5xl">
-              A student housing system built around{" "}
-              <span className="gradient-text">people</span>
-            </h1>
-            <p className="mt-5 text-lg leading-relaxed text-muted-foreground">
-              We run two welcoming residences — Mufudzi House and Siphiwe House —
-              designed to make student life easier. From the first click to
-              move-in day, everything is online, transparent, and handled by a
-              team that cares.
-            </p>
-          </div>
+      <section className="container pb-12 pt-12 sm:pt-20">
+        <div className="border-b border-border pb-6">
+          <span className="text-xs uppercase tracking-wider text-muted-foreground">
+            About us
+          </span>
+        </div>
+        <div className="grid gap-12 pt-10 lg:grid-cols-[1.3fr_1fr] lg:items-end">
+          <h1 className="max-w-3xl text-balance font-display text-5xl font-light leading-[1.02] tracking-tight sm:text-6xl lg:text-7xl">
+            A student housing system built around{" "}
+            <span className="italic text-brand-500">people</span>.
+          </h1>
+          <p className="text-lg leading-relaxed text-muted-foreground">
+            We run two welcoming residences — Mufudzi House and Siphiwe House —
+            designed to make student life easier. From the first click to
+            move-in day, everything is online, transparent, and handled by a
+            team that cares.
+          </p>
+        </div>
+
+        <div className="relative mt-12 aspect-[16/9] w-full overflow-hidden rounded-3xl">
+          <Image
+            src={ABOUT_IMG}
+            alt="Modern residence architecture"
+            fill
+            priority
+            sizes="100vw"
+            className="object-cover"
+          />
         </div>
       </section>
 
-      <section className="container pb-8">
-        <div className="grid gap-5 sm:grid-cols-2">
+      <section className="container pb-8 pt-8">
+        <div className="grid gap-px overflow-hidden rounded-2xl border border-border bg-border sm:grid-cols-2">
           {VALUES.map((v) => {
             const Icon = v.icon;
             return (
-              <div
-                key={v.title}
-                className="rounded-2xl border border-border bg-card p-6 shadow-sm"
-              >
-                <span className="grid size-11 place-items-center rounded-xl bg-brand-50 text-brand-600">
-                  <Icon className="size-5" />
-                </span>
-                <h2 className="mt-4 font-display text-lg font-semibold">
+              <div key={v.title} className="bg-card p-7">
+                <Icon className="size-5 text-foreground" strokeWidth={1.5} />
+                <h2 className="mt-4 font-display text-xl font-medium">
                   {v.title}
                 </h2>
-                <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
                   {v.description}
                 </p>
               </div>
@@ -94,25 +100,23 @@ export default function AboutPage() {
         </div>
       </section>
 
-      <section className="container py-16">
-        <div className="overflow-hidden rounded-3xl gradient-brand px-6 py-12 text-center text-white shadow-lg sm:px-12">
-          <h2 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
-            Find your room today
-          </h2>
-          <p className="mx-auto mt-3 max-w-lg text-brand-50/90">
-            Browse our houses, pick an available room, and apply in minutes.
-          </p>
-          <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
-            <Button asChild size="lg" variant="secondary">
+      <section className="container py-16 sm:py-24">
+        <div className="flex flex-col items-start gap-6 border-t border-border pt-14 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="max-w-lg text-balance font-display text-4xl font-light tracking-tight sm:text-5xl">
+              Find your room today.
+            </h2>
+            <p className="mt-4 max-w-md text-muted-foreground">
+              Browse our houses, pick an available room, and apply in minutes.
+            </p>
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Button asChild size="lg" variant="outline" className="rounded-full">
               <Link href="/houses">Explore houses</Link>
             </Button>
-            <Button
-              asChild
-              size="lg"
-              className="bg-white text-brand-700 hover:bg-white/90"
-            >
+            <Button asChild size="lg" className="rounded-full">
               <Link href="/book">
-                Book a Room
+                Book a room
                 <ArrowRight className="size-4" />
               </Link>
             </Button>

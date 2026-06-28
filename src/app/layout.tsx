@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Sora } from "next/font/google";
+import { Inter, Bricolage_Grotesque } from "next/font/google";
 import { Toaster } from "sonner";
 import "./globals.css";
 
@@ -8,10 +8,12 @@ const inter = Inter({
   variable: "--font-sans",
   display: "swap",
 });
-const sora = Sora({
+// Editorial grotesque for display headings (modern, premium feel).
+const bricolage = Bricolage_Grotesque({
   subsets: ["latin"],
   variable: "--font-display",
   display: "swap",
+  weight: ["400", "500", "600", "700", "800"],
 });
 
 export const metadata: Metadata = {
@@ -39,7 +41,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${inter.variable} ${sora.variable}`}>
+    <html lang="en" className={`${inter.variable} ${bricolage.variable}`}>
       <body className="min-h-screen font-sans antialiased">
         {children}
         <Toaster richColors position="top-center" closeButton />

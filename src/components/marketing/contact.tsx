@@ -1,6 +1,10 @@
 import Link from "next/link";
+import Image from "next/image";
 import { Mail, Phone, MapPin, Clock, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+
+const CONTACT_IMG =
+  "https://images.unsplash.com/photo-1505691938895-1758d7feb511?auto=format&fit=crop&w=1200&q=80";
 
 const DETAILS = [
   {
@@ -31,53 +35,59 @@ const DETAILS = [
 
 export function Contact() {
   return (
-    <section id="contact" className="scroll-mt-20 bg-brand-50/60 py-20">
-      <div className="container">
-        <div className="grid items-center gap-12 lg:grid-cols-2">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-brand-600">
-              Contact
-            </p>
-            <h2 className="mt-2 font-display text-3xl font-bold tracking-tight sm:text-4xl">
-              Ready when you are
-            </h2>
-            <p className="mt-3 max-w-md text-muted-foreground">
-              Have a question or want to arrange a viewing? Reach out, or skip
-              ahead and book your room online.
-            </p>
-            <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-              <Button asChild variant="brand" size="lg">
-                <Link href="/book">
-                  Book a Room
-                  <ArrowRight className="size-4" />
-                </Link>
-              </Button>
-              <Button asChild variant="outline" size="lg">
-                <Link href="/houses">Browse houses</Link>
-              </Button>
-            </div>
+    <section
+      id="contact"
+      className="border-t border-border scroll-mt-24 py-20 sm:py-28"
+    >
+      <div className="container grid items-center gap-12 lg:grid-cols-2">
+        <div>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">
+            Contact
+          </p>
+          <h2 className="mt-3 font-display text-4xl font-light tracking-tight sm:text-5xl">
+            Ready when you are.
+          </h2>
+          <p className="mt-4 max-w-md text-muted-foreground">
+            Have a question or want to arrange a viewing? Reach out, or skip
+            ahead and book your room online.
+          </p>
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            <Button asChild size="lg" className="rounded-full">
+              <Link href="/book">
+                Book a room
+                <ArrowRight className="size-4" />
+              </Link>
+            </Button>
+            <Button asChild size="lg" variant="outline" className="rounded-full">
+              <Link href="/houses">Browse houses</Link>
+            </Button>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <dl className="mt-12 grid gap-x-8 gap-y-8 sm:grid-cols-2">
             {DETAILS.map((d) => {
               const Icon = d.icon;
               return (
-                <div
-                  key={d.label}
-                  className="rounded-2xl border border-border bg-card p-5 shadow-sm"
-                >
-                  <span className="grid size-10 place-items-center rounded-xl bg-brand-50 text-brand-600">
-                    <Icon className="size-5" />
-                  </span>
-                  <p className="mt-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                <div key={d.label} className="border-t border-border pt-4">
+                  <dt className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
+                    <Icon className="size-4 text-sand-400" />
                     {d.label}
-                  </p>
-                  <p className="mt-0.5 font-semibold">{d.value}</p>
-                  <p className="text-xs text-muted-foreground">{d.hint}</p>
+                  </dt>
+                  <dd className="mt-2 font-medium">{d.value}</dd>
+                  <dd className="text-xs text-muted-foreground">{d.hint}</dd>
                 </div>
               );
             })}
-          </div>
+          </dl>
+        </div>
+
+        <div className="relative order-first aspect-[4/5] w-full overflow-hidden rounded-3xl lg:order-none">
+          <Image
+            src={CONTACT_IMG}
+            alt="Exterior of a modern residence"
+            fill
+            sizes="(max-width: 1024px) 100vw, 50vw"
+            className="object-cover"
+          />
         </div>
       </div>
     </section>

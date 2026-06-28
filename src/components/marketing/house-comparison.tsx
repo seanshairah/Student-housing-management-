@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Check, X } from "lucide-react";
+import { Check, Minus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { fadeUp, revealViewport } from "@/lib/animation-config";
 import { cn, formatCurrency } from "@/lib/utils";
@@ -28,22 +28,22 @@ export function HouseComparison({ houses }: { houses: ComparisonHouse[] }) {
   ).sort();
 
   return (
-    <section className="bg-brand-50/60 py-20">
+    <section className="border-y border-border bg-brand-50/60 py-20 sm:py-28">
       <div className="container">
         <motion.div
           variants={fadeUp}
           initial="hidden"
           whileInView="show"
           viewport={revealViewport}
-          className="mx-auto max-w-2xl text-center"
+          className="max-w-2xl"
         >
-          <p className="text-sm font-semibold uppercase tracking-wide text-brand-600">
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">
             Compare
           </p>
-          <h2 className="mt-2 font-display text-3xl font-bold tracking-tight sm:text-4xl">
-            Find your perfect fit
+          <h2 className="mt-3 font-display text-4xl font-light tracking-tight sm:text-5xl">
+            Find your perfect fit.
           </h2>
-          <p className="mt-3 text-muted-foreground">
+          <p className="mt-4 text-muted-foreground">
             Hover a house to highlight it, then book the one that suits you.
           </p>
         </motion.div>
@@ -53,11 +53,11 @@ export function HouseComparison({ houses }: { houses: ComparisonHouse[] }) {
           initial="hidden"
           whileInView="show"
           viewport={revealViewport}
-          className="mx-auto mt-12 max-w-4xl overflow-hidden rounded-3xl border border-border bg-card shadow-sm"
+          className="mt-12 overflow-hidden rounded-2xl border border-border bg-card"
         >
           {/* Header row */}
-          <div className="grid grid-cols-[1.2fr_repeat(2,1fr)] border-b border-border bg-muted/40">
-            <div className="p-4 text-sm font-semibold text-muted-foreground sm:p-5">
+          <div className="grid grid-cols-[1.2fr_repeat(2,1fr)] border-b border-border">
+            <div className="p-4 text-xs uppercase tracking-wider text-muted-foreground sm:p-5">
               Features
             </div>
             {houses.map((h) => (
@@ -73,7 +73,7 @@ export function HouseComparison({ houses }: { houses: ComparisonHouse[] }) {
                   active === h.id && "bg-brand-100/70",
                 )}
               >
-                <span className="font-display text-base font-semibold sm:text-lg">
+                <span className="font-display text-base font-medium sm:text-lg">
                   {h.name}
                 </span>
               </button>
@@ -83,10 +83,7 @@ export function HouseComparison({ houses }: { houses: ComparisonHouse[] }) {
           {/* Price row */}
           <ComparisonRow label="Price from" active={active} houses={houses}>
             {houses.map((h) => (
-              <span
-                key={h.id}
-                className="font-semibold text-brand-700"
-              >
+              <span key={h.id} className="font-semibold">
                 {formatCurrency(h.priceFrom)}
               </span>
             ))}
@@ -113,11 +110,11 @@ export function HouseComparison({ houses }: { houses: ComparisonHouse[] }) {
                 h.amenities.includes(amenity) ? (
                   <Check
                     key={h.id}
-                    className="mx-auto size-5 text-brand-600"
+                    className="mx-auto size-5 text-foreground"
                     aria-label="Included"
                   />
                 ) : (
-                  <X
+                  <Minus
                     key={h.id}
                     className="mx-auto size-5 text-muted-foreground/40"
                     aria-label="Not included"
@@ -138,7 +135,7 @@ export function HouseComparison({ houses }: { houses: ComparisonHouse[] }) {
                   active === h.id && "bg-brand-100/70",
                 )}
               >
-                <Button asChild variant="brand" size="sm">
+                <Button asChild size="sm" className="rounded-full">
                   <Link href={`/book?house=${h.slug}`}>Book</Link>
                 </Button>
               </div>
@@ -163,7 +160,7 @@ function ComparisonRow({
 }) {
   return (
     <div className="grid grid-cols-[1.2fr_repeat(2,1fr)] border-b border-border/70 text-sm last:border-b-0">
-      <div className="flex items-center p-4 font-medium text-foreground/80 sm:p-5">
+      <div className="flex items-center p-4 text-foreground/80 sm:p-5">
         {label}
       </div>
       {React.Children.toArray(children).map((child, i) => (
