@@ -61,15 +61,13 @@ export const emailTemplates = {
     brandedEmail({
       heading: "We've received your application 🎉",
       intro: `Hi ${d.studentName}, thank you for applying for accommodation at ${d.houseName}.`,
-      bodyHtml: `Your application reference is <strong>${d.reference}</strong>. Our team is reviewing it and you'll hear from us soon. ${detailTable(
+      bodyHtml: `Your booking has been received and is <strong>awaiting review</strong>. Your application reference is <strong>${d.reference}</strong>. ${detailTable(
         [
           ["House", String(d.houseName)],
           ["Room", String(d.roomName || "To be assigned")],
           ["Status", "Awaiting review"],
         ],
-      )}`,
-      ctaLabel: "View your portal",
-      ctaUrl: String(d.portalUrl || "#"),
+      )}<br/>You'll be notified by <strong>email and SMS</strong> as soon as your application has been reviewed. There's nothing more you need to do for now.`,
     }),
 
   newApplicationAlert: (d: TemplateData) =>
@@ -90,17 +88,25 @@ export const emailTemplates = {
 
   applicationApproved: (d: TemplateData) =>
     brandedEmail({
-      heading: "Your application is approved!",
-      intro: `Great news ${d.studentName} — your application for ${d.houseName} has been approved.`,
-      bodyHtml: `Please complete your payment of <strong>${d.amount}</strong> to secure your room. ${detailTable(
+      heading: "Your application is approved! 🎉",
+      intro: `Great news ${d.studentName} — your application for ${d.houseName} has been approved and your student portal account is ready.`,
+      bodyHtml: `Use the login details below to sign in to your student portal. Once you sign in, you'll be asked to <strong>pay your rent of ${d.amount}</strong> to activate your account — after that you'll have full access to your dashboard. ${detailTable(
         [
           ["House", String(d.houseName)],
           ["Room", String(d.roomName || "—")],
-          ["Amount due", String(d.amount)],
+          ["Rent due", String(d.amount)],
         ],
-      )}`,
-      ctaLabel: "Pay now",
-      ctaUrl: String(d.paymentUrl || "#"),
+      )}
+      <div style="margin:4px 0 16px;border:1px dashed #157857;border-radius:10px;padding:12px 16px;background:#f1faf6;">
+        <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#126047;">Your login credentials</p>
+        ${detailTable([
+          ["Login email", String(d.email)],
+          ["Temporary password", String(d.password)],
+        ])}
+        <p style="margin:0;font-size:12px;color:#8a978f;">For your security, you can change this password after signing in.</p>
+      </div>`,
+      ctaLabel: "Sign in & pay rent",
+      ctaUrl: String(d.loginUrl || "#"),
     }),
 
   applicationRejected: (d: TemplateData) =>

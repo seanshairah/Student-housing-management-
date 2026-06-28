@@ -2,9 +2,9 @@
 
 export const SMS_TEMPLATES = {
   applicationReceived:
-    "Hi {{studentName}}, your accommodation application for {{houseName}} has been received. Your room request is awaiting approval. We will update you shortly.",
+    "Hi {{studentName}}, your accommodation application for {{houseName}} has been received and is awaiting review. We'll notify you by email and SMS once it's been reviewed. No action needed for now.",
   applicationApproved:
-    "Hi {{studentName}}, your application for {{houseName}} has been approved. Please complete your payment using the secure payment link sent to your email and student portal.",
+    "Hi {{studentName}}, your application for {{houseName}} is APPROVED. Sign in to your student portal at {{loginUrl}} with email {{email}} and password {{password}} to pay your rent and activate your account.",
   applicationRejected:
     "Hi {{studentName}}, thank you for applying to {{houseName}}. Unfortunately we are unable to offer you a room at this time. Please contact us for other options.",
   paymentLinkGenerated:

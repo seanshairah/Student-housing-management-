@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { CheckCircle2, XCircle, HelpCircle, Send } from "lucide-react";
+import { CheckCircle2, XCircle, HelpCircle, Send, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -23,6 +23,7 @@ import {
   rejectApp,
   requestInfo,
   sendApplicantMessage,
+  confirmMoveInAction,
 } from "@/app/owner/actions";
 
 interface RoomOption {
@@ -35,11 +36,13 @@ export function ApplicationReview({
   currentRoomId,
   availableRooms,
   decided,
+  status,
 }: {
   applicationId: string;
   currentRoomId: string | null;
   availableRooms: RoomOption[];
   decided: boolean;
+  status?: string;
 }) {
   const [pending, startTransition] = useTransition();
   const [approveOpen, setApproveOpen] = useState(false);
@@ -144,6 +147,19 @@ export function ApplicationReview({
             </form>
           </DialogContent>
         </Dialog>
+        {/* Confirm move-in (after payment) */}
+        {status === "PAID" && (
+          <form
+            action={(fd) =>
+              wrap(() => confirmMoveInAction(fd), "Move-in confirmed")
+            }
+          >
+            <input type="hidden" name="id" value={applicationId} />
+            <Button type="submit" variant="brand" disabled={pending}>
+              <KeyRound className="size-4" /> Confirm move-in
+            </Button>
+          </form>
+        )}
       </div>
 
       {/* Request more info */}

@@ -116,6 +116,7 @@ export default async function ApplicationDetailPage({
                   label: `${r.house.name} · Room ${r.number} · ${formatPrice(toNumber(r.price))}`,
                 }))}
                 decided={decided}
+                status={app.status}
               />
             </CardContent>
           </Card>

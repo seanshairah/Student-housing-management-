@@ -17,7 +17,7 @@ import { HowItWorks } from "@/components/marketing/how-it-works";
 import { Faq } from "@/components/marketing/faq";
 import { Contact } from "@/components/marketing/contact";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60; // ISR: cache for 60s for fast loads
 
 const FALLBACK_IMG =
   "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=1200&q=80";

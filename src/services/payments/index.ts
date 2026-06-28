@@ -21,7 +21,11 @@ export * from "./paynow";
  * Generate a payment + Paynow link for an invoice.
  * Creates the Payment record, a PaymentTransaction, and returns a link.
  */
-export async function generatePaymentLink(invoiceId: string) {
+export async function generatePaymentLink(
+  invoiceId: string,
+  opts?: { notify?: boolean },
+) {
+  const notify = opts?.notify !== false;
   const invoice = await prisma.invoice.findUnique({
     where: { id: invoiceId },
     include: { studentProfile: true },
@@ -57,25 +61,27 @@ export async function generatePaymentLink(invoiceId: string) {
     },
   });
 
-  await sendTemplatedEmail(
-    invoice.studentProfile.email,
-    EMAIL_SUBJECTS.paymentRequest,
-    "paymentRequest",
-    {
-      studentName: invoice.studentProfile.fullName,
-      invoiceNumber: invoice.number,
-      description: invoice.description,
-      amount: formatCurrency(outstanding),
-      dueDate: invoice.dueDate ? formatDate(invoice.dueDate) : "—",
-      paymentUrl: paynow.redirectUrl || "",
-    },
-  ).catch(() => undefined);
+  if (notify) {
+    await sendTemplatedEmail(
+      invoice.studentProfile.email,
+      EMAIL_SUBJECTS.paymentRequest,
+      "paymentRequest",
+      {
+        studentName: invoice.studentProfile.fullName,
+        invoiceNumber: invoice.number,
+        description: invoice.description,
+        amount: formatCurrency(outstanding),
+        dueDate: invoice.dueDate ? formatDate(invoice.dueDate) : "—",
+        paymentUrl: paynow.redirectUrl || "",
+      },
+    ).catch(() => undefined);
 
-  await sendStatusSMS(invoice.studentProfile.phone, "paymentLinkGenerated", {
-    studentName: invoice.studentProfile.fullName,
-    houseName: invoice.description,
-    amount: formatCurrency(outstanding),
-  }).catch(() => undefined);
+    await sendStatusSMS(invoice.studentProfile.phone, "paymentLinkGenerated", {
+      studentName: invoice.studentProfile.fullName,
+      houseName: invoice.description,
+      amount: formatCurrency(outstanding),
+    }).catch(() => undefined);
+  }
 
   await audit({
     action: "payment.link_generated",

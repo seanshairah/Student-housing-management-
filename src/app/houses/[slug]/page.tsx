@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { SiteShell } from "@/components/marketing/site-shell";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60; // ISR: cache for 60s for fast loads
 
 const ROOM_TYPE_LABELS: Record<string, string> = {
   SINGLE: "Single",

@@ -7,6 +7,7 @@ import { audit } from "@/services/audit";
 import {
   approveApplication,
   rejectApplication,
+  confirmMoveIn,
 } from "@/services/applications";
 import { settlePayment, generatePaymentLink } from "@/services/payments";
 import { createInvoice } from "@/services/invoices";
@@ -218,6 +219,31 @@ export async function rejectApp(formData: FormData): Promise<ActionResult> {
   }
 }
 
+export async function confirmMoveInAction(
+  formData: FormData,
+): Promise<ActionResult> {
+  const session = await requireRole("OWNER");
+  try {
+    const id = String(formData.get("id") || "");
+    if (!id) throw new Error("Missing application id");
+    await confirmMoveIn(id);
+    await audit({
+      userId: session.userId,
+      actorEmail: session.email,
+      action: "application.moved_in",
+      entityType: "Application",
+      entityId: id,
+    });
+    revalidatePath("/owner/applications");
+    revalidatePath(`/owner/applications/${id}`);
+    revalidatePath("/owner/rooms");
+    revalidatePath("/owner");
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: (e as Error).message };
+  }
+}
+
 export async function requestInfo(formData: FormData): Promise<ActionResult> {
   const session = await requireRole("OWNER");
   try {
@@ -235,11 +261,14 @@ export async function requestInfo(formData: FormData): Promise<ActionResult> {
       relatedType: "Application",
       relatedId: id,
     });
+    // Only nudge undecided applications back to "awaiting review"; never rewind
+    // an already-decided one. Append the note rather than overwriting history.
+    const isUndecided = app.status === "NEW" || app.status === "AWAITING_REVIEW";
     await prisma.application.update({
       where: { id },
       data: {
-        status: "AWAITING_REVIEW",
-        reviewNotes: message,
+        status: isUndecided ? "AWAITING_REVIEW" : app.status,
+        reviewNotes: [app.reviewNotes, message].filter(Boolean).join("\n—\n"),
       },
     });
     await audit({
