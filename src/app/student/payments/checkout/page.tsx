@@ -61,7 +61,7 @@ export default async function CheckoutPage({
       <PageHeader title="Checkout" description="Complete your payment" />
 
       <Card className="overflow-hidden">
-        <div className="flex items-center justify-between gap-3 border-b border-border bg-muted/40 px-6 py-4">
+        <div className="flex items-start justify-between gap-3 border-b border-border bg-muted/40 px-6 py-4">
           <div className="flex items-center gap-2">
             <div className="flex size-9 items-center justify-center rounded-xl gradient-brand text-white">
               <CreditCard className="size-5" />
@@ -128,9 +128,9 @@ export default async function CheckoutPage({
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-3">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="truncate text-right font-medium">{value}</span>
+    <div className="flex items-start justify-between gap-3">
+      <span className="shrink-0 text-muted-foreground">{label}</span>
+      <span className="min-w-0 break-words text-right font-medium">{value}</span>
     </div>
   );
 }

@@ -38,7 +38,7 @@ export function SiteNav() {
       className={cn(
         "sticky top-0 z-50 w-full transition-all duration-300",
         scrolled
-          ? "glass border-b border-border"
+          ? "border-b border-border bg-background/95"
           : "border-b border-transparent bg-transparent",
       )}
     >
@@ -96,7 +96,7 @@ export function SiteNav() {
       {/* Mobile menu */}
       {open && (
         <div className="lg:hidden">
-          <div className="container space-y-1 border-t border-border bg-background/95 pb-6 pt-3 backdrop-blur">
+          <div className="container space-y-1 border-t border-border bg-background pb-6 pt-3">
             {LINKS.map((l) => (
               <Link
                 key={l.href}
