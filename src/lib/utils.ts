@@ -62,6 +62,19 @@ export function generateReference(prefix: string): string {
   return `${prefix}-${ts}-${rand}`;
 }
 
+/**
+ * Generate a readable temporary password for auto-provisioned student logins.
+ * Avoids ambiguous characters (0/O, 1/l/I). Example: "Mufudzi-7K4Q".
+ */
+export function generateTempPassword(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let token = "";
+  for (let i = 0; i < 6; i++) {
+    token += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return `SH-${token}`;
+}
+
 export function slugify(text: string): string {
   return text
     .toLowerCase()

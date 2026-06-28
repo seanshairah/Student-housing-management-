@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { MapPin, Check, ArrowRight } from "lucide-react";
 import { SiteShell } from "@/components/marketing/site-shell";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60; // ISR: cache for 60s for fast loads
 
 export const metadata: Metadata = {
   title: "Houses",

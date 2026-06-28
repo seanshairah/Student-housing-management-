@@ -7,6 +7,15 @@ import * as Icons from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar } from "@/components/ui/misc";
 import { LogoutButton } from "./logout-button";
+import { logoutAction } from "@/app/auth/actions";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 
 export interface ShellNavItem {
   label: string;
@@ -117,13 +126,43 @@ export function DashboardShell({
             >
               View site
             </Link>
-            <div className="flex items-center gap-2.5">
-              <Avatar name={user.name} className="size-8" />
-              <div className="hidden text-right leading-tight sm:block">
-                <p className="text-sm font-semibold">{user.name}</p>
-                <p className="text-xs text-muted-foreground">{user.email}</p>
-              </div>
-            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger className="flex items-center gap-2.5 rounded-xl p-1 outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring">
+                <Avatar name={user.name} className="size-8" />
+                <div className="hidden text-right leading-tight sm:block">
+                  <p className="text-sm font-semibold">{user.name}</p>
+                  <p className="max-w-[160px] truncate text-xs text-muted-foreground">
+                    {user.email}
+                  </p>
+                </div>
+                <Icons.ChevronDown className="hidden size-4 text-muted-foreground sm:block" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[14rem]">
+                <DropdownMenuLabel>
+                  <p className="font-semibold text-foreground">{user.name}</p>
+                  <p className="truncate text-xs font-normal text-muted-foreground">
+                    {user.email}
+                  </p>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/">
+                    <Icons.Globe className="size-4" /> View public site
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <form action={logoutAction} className="w-full">
+                    <button
+                      type="submit"
+                      className="flex w-full items-center gap-2 text-rose-600"
+                    >
+                      <Icons.LogOut className="size-4" /> Sign out
+                    </button>
+                  </form>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </header>
 

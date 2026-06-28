@@ -6,7 +6,7 @@ import {
   UserRole,
   type Prisma,
 } from "@prisma/client";
-import { generateReference, formatCurrency } from "@/lib/utils";
+import { generateReference, formatCurrency, generateTempPassword } from "@/lib/utils";
 import { hashPassword } from "@/lib/auth";
 import { sendTemplatedEmail } from "@/services/email";
 import { sendStatusSMS } from "@/services/sms";
@@ -158,33 +158,50 @@ export async function submitApplication(input: SubmitApplicationInput) {
   return application;
 }
 
-/** Ensure a student User + profile exists for an application (used on approval). */
+/**
+ * Ensure a student User + profile exists for an application (used on approval).
+ * Provisions a fresh temporary password and returns it so login credentials can
+ * be sent to the student. Returns `tempPassword: null` only if the student was
+ * already onboarded with their own profile.
+ */
 async function ensureStudentProfile(
   applicationId: string,
   tx: Prisma.TransactionClient,
-) {
+): Promise<{
+  profile: Awaited<ReturnType<typeof tx.studentProfile.create>>;
+  tempPassword: string | null;
+}> {
   const app = await tx.application.findUnique({
     where: { id: applicationId },
   });
   if (!app) throw new Error("Application not found");
   if (app.studentProfileId) {
-    return tx.studentProfile.findUnique({ where: { id: app.studentProfileId } });
+    const existing = await tx.studentProfile.findUnique({
+      where: { id: app.studentProfileId },
+    });
+    if (existing) return { profile: existing, tempPassword: null };
   }
 
-  // Reuse an existing user by email, else create one.
-  let user = await tx.user.findUnique({ where: { email: app.email } });
-  if (!user) {
-    const tempPassword = await hashPassword("student123");
-    user = await tx.user.create({
-      data: {
-        email: app.email,
-        name: app.fullName,
-        phone: app.phone,
-        role: UserRole.STUDENT,
-        passwordHash: tempPassword,
-      },
-    });
-  }
+  // Generate fresh login credentials so the student can access their portal.
+  const tempPassword = generateTempPassword();
+  const passwordHash = await hashPassword(tempPassword);
+
+  // Reuse an existing user by email (resetting their password), else create one.
+  const existingUser = await tx.user.findUnique({ where: { email: app.email } });
+  const user = existingUser
+    ? await tx.user.update({
+        where: { id: existingUser.id },
+        data: { passwordHash, role: UserRole.STUDENT, isActive: true },
+      })
+    : await tx.user.create({
+        data: {
+          email: app.email,
+          name: app.fullName,
+          phone: app.phone,
+          role: UserRole.STUDENT,
+          passwordHash,
+        },
+      });
 
   const profile = await tx.studentProfile.upsert({
     where: { userId: user.id },
@@ -215,7 +232,7 @@ async function ensureStudentProfile(
     where: { id: applicationId },
     data: { studentProfileId: profile.id },
   });
-  return profile;
+  return { profile, tempPassword };
 }
 
 /**
@@ -228,7 +245,7 @@ export async function approveApplication(
 ) {
   const settings = await getSettings();
 
-  const { application, invoiceId } = await prisma.$transaction(
+  const { application, invoiceId, tempPassword } = await prisma.$transaction(
     async (tx: Prisma.TransactionClient) => {
       const app = await tx.application.findUnique({
         where: { id: applicationId },
@@ -241,14 +258,20 @@ export async function approveApplication(
 
       const room = await tx.room.findUnique({ where: { id: roomId } });
       if (!room) throw new Error("Room not found");
-      if (
-        room.status === RoomStatus.OCCUPIED &&
-        room.occupied >= room.capacity
-      ) {
+      if (room.occupied >= room.capacity) {
         throw new Error("Room is fully occupied");
       }
+      if (
+        room.status === RoomStatus.MAINTENANCE ||
+        room.status === RoomStatus.UNAVAILABLE
+      ) {
+        throw new Error("Room is not available for assignment");
+      }
 
-      const profile = await ensureStudentProfile(applicationId, tx);
+      const { profile, tempPassword } = await ensureStudentProfile(
+        applicationId,
+        tx,
+      );
       if (!profile) throw new Error("Could not create student profile");
 
       // Reserve the room for this student.
@@ -283,12 +306,19 @@ export async function approveApplication(
         include: { house: true, room: true, studentProfile: true },
       });
 
-      return { application: updated, invoiceId: invoice.id, amount, profile };
+      return {
+        application: updated,
+        invoiceId: invoice.id,
+        amount,
+        profile,
+        tempPassword,
+      };
     },
   );
 
-  // Generate the payment link (creates Payment + sends email/SMS).
-  const { redirectUrl } = await generatePaymentLink(invoiceId);
+  // Generate the payment request + Paynow link, but suppress its own
+  // notifications — the approval/credentials message below covers it.
+  await generatePaymentLink(invoiceId, { notify: false });
 
   // Move application into payment-pending now that a link exists.
   await prisma.application.update({
@@ -297,6 +327,9 @@ export async function approveApplication(
   });
 
   const amountDue = application.room ? Number(application.room.price) : 0;
+  const loginUrl = `${process.env.APP_URL || ""}/auth/login`;
+
+  // Send login credentials + rent instructions via email and SMS.
   await sendTemplatedEmail(
     application.email,
     EMAIL_SUBJECTS.applicationApproved,
@@ -306,20 +339,25 @@ export async function approveApplication(
       houseName: application.house.name,
       roomName: application.room?.number ?? "—",
       amount: formatCurrency(amountDue),
-      paymentUrl: redirectUrl || `${process.env.APP_URL || ""}/student/payments`,
+      email: application.email,
+      password: tempPassword ?? "(use your existing password)",
+      loginUrl,
     },
   ).catch(() => undefined);
 
   await sendStatusSMS(application.phone, "applicationApproved", {
     studentName: application.fullName,
     houseName: application.house.name,
+    email: application.email,
+    password: tempPassword ?? "your existing password",
+    loginUrl,
   }).catch(() => undefined);
 
   if (application.studentProfile?.userId) {
     await notifyDashboard({
       userId: application.studentProfile.userId,
       title: "Application approved 🎉",
-      body: "Complete your payment to secure your room.",
+      body: "Pay your rent to activate your account and unlock your dashboard.",
       type: "application",
       link: "/student/payments",
       relatedType: "Application",
@@ -416,14 +454,18 @@ export async function confirmMoveIn(applicationId: string) {
     const room = await tx.room.findUnique({ where: { id: app.roomId } });
     if (!room) throw new Error("Room not found");
 
+    const nextOccupied = room.occupied + 1;
     await tx.room.update({
       where: { id: app.roomId },
       data: {
-        occupied: room.occupied + 1,
+        occupied: nextOccupied,
+        // Stay RESERVED while there's still capacity (it's spoken for), only
+        // OCCUPIED once full. Never flip back to AVAILABLE — that would allow
+        // the public form to double-book the room.
         status:
-          room.occupied + 1 >= room.capacity
+          nextOccupied >= room.capacity
             ? RoomStatus.OCCUPIED
-            : RoomStatus.AVAILABLE,
+            : RoomStatus.RESERVED,
       },
     });
     await tx.studentProfile.update({
