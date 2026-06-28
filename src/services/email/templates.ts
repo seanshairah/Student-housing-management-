@@ -114,6 +114,37 @@ export const emailTemplates = {
       ctaUrl: String(d.loginUrl || "#"),
     }),
 
+  renewalReceived: (d: TemplateData) =>
+    brandedEmail({
+      heading: "We've received your renewal request",
+      intro: `Hi ${d.studentName}, thanks for choosing to stay with us at ${d.houseName}.`,
+      bodyHtml: `Your request to renew your stay is <strong>awaiting review</strong>. ${detailTable(
+        [
+          ["House", String(d.houseName)],
+          ["Room", String(d.roomName || "—")],
+          ["Requested term", String(d.term || "Next semester")],
+          ["Reference", String(d.reference)],
+          ["Status", "Awaiting review"],
+        ],
+      )}You'll be notified by <strong>email and SMS</strong> as soon as it's been reviewed.`,
+    }),
+
+  renewalApproved: (d: TemplateData) =>
+    brandedEmail({
+      heading: "Your stay renewal is approved! 🎉",
+      intro: `Great news ${d.studentName} — your renewal for ${d.houseName} has been approved.`,
+      bodyHtml: `Please sign in to your student portal and pay <strong>${d.amount}</strong> to confirm your room for ${d.term || "the new term"}. ${detailTable(
+        [
+          ["House", String(d.houseName)],
+          ["Room", String(d.roomName || "—")],
+          ["Term", String(d.term || "Next semester")],
+          ["Amount due", String(d.amount)],
+        ],
+      )}Use your existing login details — no need for new credentials.`,
+      ctaLabel: "Sign in & pay",
+      ctaUrl: String(d.loginUrl || "#"),
+    }),
+
   applicationRejected: (d: TemplateData) =>
     brandedEmail({
       heading: "Update on your application",

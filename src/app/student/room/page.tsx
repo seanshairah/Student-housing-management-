@@ -20,6 +20,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { StatusBadge, Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/misc";
+import { RenewalForm } from "@/components/student/renewal-form";
 import { formatCurrency } from "@/lib/utils";
 import { ROOM_STATUS_META } from "@/constants";
 
@@ -57,6 +58,30 @@ export default async function StudentRoomPage() {
   }
 
   const { house, room } = profile;
+
+  // Renewal: available rooms to optionally move into, and any in-flight request.
+  const [availableRooms, openRenewal] = await Promise.all([
+    prisma.room.findMany({
+      where: { status: "AVAILABLE" },
+      include: { house: true },
+      orderBy: [{ house: { name: "asc" } }, { number: "asc" }],
+    }),
+    prisma.application.findFirst({
+      where: {
+        studentProfileId: profile.id,
+        type: "RENEWAL",
+        status: { in: ["NEW", "AWAITING_REVIEW", "APPROVED", "PAYMENT_PENDING"] },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
+
+  const roomOptions = availableRooms
+    .filter((r) => r.occupied < r.capacity)
+    .map((r) => ({
+      id: r.id,
+      label: `${r.house.name} · Room ${r.number} · ${formatCurrency(Number(r.price))}/mo`,
+    }));
 
   return (
     <div className="space-y-6">
@@ -132,6 +157,15 @@ export default async function StudentRoomPage() {
           empty="No safety information listed."
         />
       </div>
+
+      <RenewalForm
+        currentRoom={{
+          id: room.id,
+          label: `${house.name} · Room ${room.number}`,
+        }}
+        availableRooms={roomOptions}
+        pendingTerm={openRenewal?.requestedTerm ?? (openRenewal ? "the coming term" : null)}
+      />
     </div>
   );
 }

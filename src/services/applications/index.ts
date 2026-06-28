@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import {
   ApplicationStatus,
+  ApplicationType,
   RoomStatus,
   StudentStatus,
   UserRole,
@@ -158,6 +159,132 @@ export async function submitApplication(input: SubmitApplicationInput) {
   return application;
 }
 
+export interface RenewalInput {
+  studentProfileId: string;
+  roomId: string; // the student's current room, or a different available room
+  requestedTerm: string;
+  notes?: string;
+}
+
+/**
+ * Request to renew / extend a stay for the coming term. An existing student
+ * re-applies — it flows through the same owner approval workflow as a new
+ * booking. If a different room is requested it must be available and is held.
+ */
+export async function requestRenewal(input: RenewalInput) {
+  const reference = generateReference("RNW");
+  const profile = await prisma.studentProfile.findUnique({
+    where: { id: input.studentProfileId },
+    include: { house: true, room: true, user: true },
+  });
+  if (!profile) throw new Error("Student profile not found");
+
+  const application = await prisma.$transaction(
+    async (tx: Prisma.TransactionClient) => {
+      const room = await tx.room.findUnique({ where: { id: input.roomId } });
+      if (!room) throw new Error("Selected room not found");
+
+      const isCurrentRoom = profile.roomId === room.id;
+      if (!isCurrentRoom) {
+        // Moving to a different room — it must be free, and we hold it.
+        if (
+          room.status !== RoomStatus.AVAILABLE ||
+          room.occupied >= room.capacity
+        ) {
+          throw new Error(
+            "Sorry, that room is no longer available. Please choose another room.",
+          );
+        }
+        await tx.room.update({
+          where: { id: room.id },
+          data: { status: RoomStatus.PENDING_APPLICATION },
+        });
+      }
+
+      return tx.application.create({
+        data: {
+          reference,
+          type: ApplicationType.RENEWAL,
+          requestedTerm: input.requestedTerm,
+          studentProfileId: profile.id,
+          fullName: profile.fullName,
+          email: profile.email,
+          phone: profile.phone,
+          nationalId: profile.nationalId,
+          age: profile.age,
+          gender: profile.gender,
+          institution: profile.institution,
+          program: profile.program,
+          yearOfStudy: profile.yearOfStudy,
+          houseId: room.houseId,
+          roomId: room.id,
+          nextOfKinName: profile.nextOfKinName,
+          nextOfKinPhone: profile.nextOfKinPhone,
+          nextOfKinRelation: profile.nextOfKinRelation,
+          guardianName: profile.guardianName,
+          guardianPhone: profile.guardianPhone,
+          specialNotes: input.notes,
+          agreedToTerms: true,
+          status: ApplicationStatus.AWAITING_REVIEW,
+        },
+        include: { house: true, room: true },
+      });
+    },
+  );
+
+  await sendTemplatedEmail(
+    profile.email,
+    EMAIL_SUBJECTS.renewalReceived,
+    "renewalReceived",
+    {
+      studentName: profile.fullName,
+      houseName: application.house.name,
+      roomName: application.room?.number ?? "—",
+      term: input.requestedTerm,
+      reference,
+    },
+  ).catch(() => undefined);
+
+  await sendStatusSMS(profile.phone, "renewalReceived", {
+    studentName: profile.fullName,
+    houseName: application.house.name,
+    term: input.requestedTerm,
+  }).catch(() => undefined);
+
+  await notifyOwners({
+    title: "Renewal request received",
+    body: `${profile.fullName} requested to renew their stay at ${application.house.name}${
+      application.room ? ` (Room ${application.room.number})` : ""
+    } for ${input.requestedTerm}.`,
+    type: "application",
+    link: `/owner/applications/${application.id}`,
+    relatedType: "Application",
+    relatedId: application.id,
+  }).catch(() => undefined);
+
+  if (profile.userId) {
+    await notifyDashboard({
+      userId: profile.userId,
+      title: "Renewal request submitted",
+      body: "Your renewal is awaiting review. We'll notify you by email and SMS.",
+      type: "application",
+      link: "/student/room",
+      relatedType: "Application",
+      relatedId: application.id,
+    }).catch(() => undefined);
+  }
+
+  await audit({
+    actorEmail: profile.email,
+    action: "renewal.requested",
+    entityType: "Application",
+    entityId: application.id,
+    metadata: { reference, term: input.requestedTerm },
+  });
+
+  return application;
+}
+
 /**
  * Ensure a student User + profile exists for an application (used on approval).
  * Provisions a fresh temporary password and returns it so login credentials can
@@ -245,28 +372,20 @@ export async function approveApplication(
 ) {
   const settings = await getSettings();
 
-  const { application, invoiceId, tempPassword } = await prisma.$transaction(
-    async (tx: Prisma.TransactionClient) => {
+  const { application, invoiceId, tempPassword, isRenewal } =
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const app = await tx.application.findUnique({
         where: { id: applicationId },
         include: { house: true, room: true },
       });
       if (!app) throw new Error("Application not found");
 
+      const isRenewal = app.type === ApplicationType.RENEWAL;
       const roomId = options?.roomId ?? app.roomId ?? undefined;
       if (!roomId) throw new Error("Assign a room before approving");
 
       const room = await tx.room.findUnique({ where: { id: roomId } });
       if (!room) throw new Error("Room not found");
-      if (room.occupied >= room.capacity) {
-        throw new Error("Room is fully occupied");
-      }
-      if (
-        room.status === RoomStatus.MAINTENANCE ||
-        room.status === RoomStatus.UNAVAILABLE
-      ) {
-        throw new Error("Room is not available for assignment");
-      }
 
       const { profile, tempPassword } = await ensureStudentProfile(
         applicationId,
@@ -274,22 +393,49 @@ export async function approveApplication(
       );
       if (!profile) throw new Error("Could not create student profile");
 
-      // Reserve the room for this student.
-      await tx.room.update({
-        where: { id: roomId },
-        data: { status: RoomStatus.RESERVED },
-      });
-      await tx.studentProfile.update({
-        where: { id: profile.id },
-        data: { roomId, houseId: app.houseId, status: StudentStatus.APPLICANT },
-      });
+      // A renewal keeping the same room already occupies it — don't re-check
+      // capacity or change its status. Any other case is a new occupant.
+      const isCurrentRoom = isRenewal && profile.roomId === roomId;
+      if (!isCurrentRoom) {
+        if (room.occupied >= room.capacity) {
+          throw new Error("Room is fully occupied");
+        }
+        if (
+          room.status === RoomStatus.MAINTENANCE ||
+          room.status === RoomStatus.UNAVAILABLE
+        ) {
+          throw new Error("Room is not available for assignment");
+        }
+        await tx.room.update({
+          where: { id: roomId },
+          data: { status: RoomStatus.RESERVED },
+        });
+      }
+
+      if (!isRenewal) {
+        // New student: assign the room and gate them to payment until paid.
+        await tx.studentProfile.update({
+          where: { id: profile.id },
+          data: {
+            roomId,
+            houseId: app.houseId,
+            status: StudentStatus.APPLICANT,
+          },
+        });
+      }
+      // For renewals the resident stays ACTIVE (keeps dashboard access); any
+      // room change + lease extension is applied when payment settles.
 
       const amount = options?.amount ?? Number(room.price);
       const invoice = await createInvoice(
         {
           studentProfileId: profile.id,
           applicationId: app.id,
-          description: `Accommodation — ${app.house.name}, Room ${room.number}`,
+          description: isRenewal
+            ? `Stay renewal — ${app.house.name}, Room ${room.number}${
+                app.requestedTerm ? ` (${app.requestedTerm})` : ""
+              }`
+            : `Accommodation — ${app.house.name}, Room ${room.number}`,
           amount,
           dueInDays: settings.paymentTermsDays,
         },
@@ -312,9 +458,9 @@ export async function approveApplication(
         amount,
         profile,
         tempPassword,
+        isRenewal,
       };
-    },
-  );
+    });
 
   // Generate the payment request + Paynow link, but suppress its own
   // notifications — the approval/credentials message below covers it.
@@ -329,35 +475,61 @@ export async function approveApplication(
   const amountDue = application.room ? Number(application.room.price) : 0;
   const loginUrl = `${process.env.APP_URL || ""}/auth/login`;
 
-  // Send login credentials + rent instructions via email and SMS.
-  await sendTemplatedEmail(
-    application.email,
-    EMAIL_SUBJECTS.applicationApproved,
-    "applicationApproved",
-    {
+  if (isRenewal) {
+    // Existing resident — no new credentials, just "pay to confirm".
+    await sendTemplatedEmail(
+      application.email,
+      EMAIL_SUBJECTS.renewalApproved,
+      "renewalApproved",
+      {
+        studentName: application.fullName,
+        houseName: application.house.name,
+        roomName: application.room?.number ?? "—",
+        term: application.requestedTerm ?? "the new term",
+        amount: formatCurrency(amountDue),
+        loginUrl,
+      },
+    ).catch(() => undefined);
+
+    await sendStatusSMS(application.phone, "renewalApproved", {
       studentName: application.fullName,
       houseName: application.house.name,
-      roomName: application.room?.number ?? "—",
+      term: application.requestedTerm ?? "the new term",
       amount: formatCurrency(amountDue),
-      email: application.email,
-      password: tempPassword ?? "(use your existing password)",
-      loginUrl,
-    },
-  ).catch(() => undefined);
+    }).catch(() => undefined);
+  } else {
+    // New student — send auto-generated login credentials + rent instructions.
+    await sendTemplatedEmail(
+      application.email,
+      EMAIL_SUBJECTS.applicationApproved,
+      "applicationApproved",
+      {
+        studentName: application.fullName,
+        houseName: application.house.name,
+        roomName: application.room?.number ?? "—",
+        amount: formatCurrency(amountDue),
+        email: application.email,
+        password: tempPassword ?? "(use your existing password)",
+        loginUrl,
+      },
+    ).catch(() => undefined);
 
-  await sendStatusSMS(application.phone, "applicationApproved", {
-    studentName: application.fullName,
-    houseName: application.house.name,
-    email: application.email,
-    password: tempPassword ?? "your existing password",
-    loginUrl,
-  }).catch(() => undefined);
+    await sendStatusSMS(application.phone, "applicationApproved", {
+      studentName: application.fullName,
+      houseName: application.house.name,
+      email: application.email,
+      password: tempPassword ?? "your existing password",
+      loginUrl,
+    }).catch(() => undefined);
+  }
 
   if (application.studentProfile?.userId) {
     await notifyDashboard({
       userId: application.studentProfile.userId,
-      title: "Application approved 🎉",
-      body: "Pay your rent to activate your account and unlock your dashboard.",
+      title: isRenewal ? "Renewal approved 🎉" : "Application approved 🎉",
+      body: isRenewal
+        ? "Pay to confirm your room for the new term."
+        : "Pay your rent to activate your account and unlock your dashboard.",
       type: "application",
       link: "/student/payments",
       relatedType: "Application",

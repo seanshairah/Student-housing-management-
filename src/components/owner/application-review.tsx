@@ -37,12 +37,14 @@ export function ApplicationReview({
   availableRooms,
   decided,
   status,
+  type,
 }: {
   applicationId: string;
   currentRoomId: string | null;
   availableRooms: RoomOption[];
   decided: boolean;
   status?: string;
+  type?: string;
 }) {
   const [pending, startTransition] = useTransition();
   const [approveOpen, setApproveOpen] = useState(false);
@@ -147,8 +149,9 @@ export function ApplicationReview({
             </form>
           </DialogContent>
         </Dialog>
-        {/* Confirm move-in (after payment) */}
-        {status === "PAID" && (
+        {/* Confirm move-in (after payment) — new students only; renewals are
+            finalised automatically when payment settles. */}
+        {status === "PAID" && type !== "RENEWAL" && (
           <form
             action={(fd) =>
               wrap(() => confirmMoveInAction(fd), "Move-in confirmed")

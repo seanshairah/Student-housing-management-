@@ -47,6 +47,11 @@ enum ApplicationStatus {
   CANCELLED
 }
 
+enum ApplicationType {
+  NEW
+  RENEWAL
+}
+
 enum StudentStatus {
   PROSPECT
   APPLICANT
@@ -244,6 +249,8 @@ model StudentProfile {
 model Application {
   id                String            @id @default(cuid())
   reference         String            @unique
+  type              ApplicationType   @default(NEW)
+  requestedTerm     String?
   studentProfileId  String?
   studentProfile    StudentProfile?   @relation(fields: [studentProfileId], references: [id])
 

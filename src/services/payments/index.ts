@@ -3,6 +3,8 @@ import {
   PaymentStatus,
   StudentStatus,
   ApplicationStatus,
+  ApplicationType,
+  RoomStatus,
   type Prisma,
 } from "@prisma/client";
 import { generateReference, formatCurrency, formatDate, toNumber } from "@/lib/utils";
@@ -126,10 +128,65 @@ export async function settlePayment(reference: string) {
         where: { id: payment.invoiceId },
       });
       if (inv?.applicationId) {
-        await tx.application.update({
+        const app = await tx.application.update({
           where: { id: inv.applicationId },
           data: { status: ApplicationStatus.PAID },
         });
+
+        // Renewal confirmed: extend the lease and, if moving rooms, transfer.
+        if (app.type === ApplicationType.RENEWAL) {
+          const profile = await tx.studentProfile.findUnique({
+            where: { id: payment.studentProfileId },
+          });
+          const base =
+            profile?.leaseEnd && profile.leaseEnd > new Date()
+              ? profile.leaseEnd
+              : new Date();
+          const newLeaseEnd = new Date(base.getTime() + 180 * 86400000);
+          const profileData: Prisma.StudentProfileUpdateInput = {
+            leaseEnd: newLeaseEnd,
+          };
+
+          if (app.roomId && profile?.roomId && app.roomId !== profile.roomId) {
+            // Free the old room.
+            const oldRoom = await tx.room.findUnique({
+              where: { id: profile.roomId },
+            });
+            if (oldRoom) {
+              const occ = Math.max(0, oldRoom.occupied - 1);
+              await tx.room.update({
+                where: { id: oldRoom.id },
+                data: {
+                  occupied: occ,
+                  status: occ === 0 ? RoomStatus.AVAILABLE : oldRoom.status,
+                },
+              });
+            }
+            // Occupy the new room.
+            const newRoom = await tx.room.findUnique({
+              where: { id: app.roomId },
+            });
+            if (newRoom) {
+              const occ = newRoom.occupied + 1;
+              await tx.room.update({
+                where: { id: app.roomId },
+                data: {
+                  occupied: occ,
+                  status:
+                    occ >= newRoom.capacity
+                      ? RoomStatus.OCCUPIED
+                      : RoomStatus.RESERVED,
+                },
+              });
+            }
+            profileData.room = { connect: { id: app.roomId } };
+          }
+
+          await tx.studentProfile.update({
+            where: { id: payment.studentProfileId },
+            data: profileData,
+          });
+        }
       }
     }
     await tx.studentProfile.update({

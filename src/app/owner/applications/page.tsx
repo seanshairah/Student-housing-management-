@@ -22,6 +22,7 @@ export default async function OwnerApplicationsPage() {
     roomNumber: a.room?.number ?? null,
     status: a.status,
     createdAt: a.createdAt.toISOString(),
+    type: a.type,
   }));
 
   return (

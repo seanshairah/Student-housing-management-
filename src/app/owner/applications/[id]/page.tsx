@@ -6,7 +6,7 @@ import { requireRole } from "@/lib/session";
 import { toNumber, formatDateTime } from "@/lib/utils";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { StatusBadge } from "@/components/ui/badge";
+import { StatusBadge, Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/misc";
 import { APPLICATION_STATUS_META } from "@/constants";
@@ -51,7 +51,15 @@ export default async function ApplicationDetailPage({
         </Link>
       </Button>
 
-      <PageHeader title={app.fullName} description={`Reference ${app.reference}`}>
+      <PageHeader
+        title={app.fullName}
+        description={
+          app.type === "RENEWAL"
+            ? `Renewal · Reference ${app.reference}${app.requestedTerm ? ` · ${app.requestedTerm}` : ""}`
+            : `Reference ${app.reference}`
+        }
+      >
+        {app.type === "RENEWAL" && <Badge color="blue">Renewal</Badge>}
         <StatusBadge meta={APPLICATION_STATUS_META[app.status]} />
       </PageHeader>
 
@@ -117,6 +125,7 @@ export default async function ApplicationDetailPage({
                 }))}
                 decided={decided}
                 status={app.status}
+                type={app.type}
               />
             </CardContent>
           </Card>
