@@ -4,7 +4,6 @@ import {
   CreditCard,
   DoorOpen,
   Megaphone,
-  Wallet,
   ArrowRight,
   FileText,
 } from "lucide-react";

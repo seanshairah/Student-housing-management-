@@ -303,6 +303,17 @@ async function main() {
     },
   });
 
+  // Advance document counters past every manually-seeded number so the first
+  // auto-generated invoice/receipt/statement never collides with seed data.
+  await prisma.settings.update({
+    where: { id: "singleton" },
+    data: {
+      invoiceCounter: invCounter,
+      receiptCounter: rctCounter,
+      statementCounter: 1000,
+    },
+  });
+
   // ── Applications in various states ──
   const apps = [
     {

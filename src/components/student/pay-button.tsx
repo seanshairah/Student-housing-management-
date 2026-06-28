@@ -2,10 +2,8 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
 import { CreditCard, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { payNowAction } from "@/app/student/actions";
 
 interface PayButtonProps {
   reference: string;
