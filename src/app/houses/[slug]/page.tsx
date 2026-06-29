@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/prisma";
 import { RoomStatus } from "@prisma/client";
-import { toNumber, formatCurrency } from "@/lib/utils";
+import { getPublicHouse } from "@/lib/public-houses";
+import { seedHouses } from "@/data/houses";
+import { formatCurrency } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   MapPin,
@@ -18,6 +19,12 @@ import { SiteShell } from "@/components/marketing/site-shell";
 import { HouseGallery } from "@/components/marketing/house-gallery";
 
 export const revalidate = 60; // ISR: cache for 60s for fast loads
+
+// Pre-render both house pages at build time so a first visit never waits on a
+// cold database. Slugs are the canonical two houses.
+export function generateStaticParams() {
+  return seedHouses.map((h) => ({ slug: h.slug }));
+}
 
 const ROOM_TYPE_LABELS: Record<string, string> = {
   SINGLE: "Single",
@@ -36,7 +43,7 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const house = await prisma.house.findUnique({ where: { slug } });
+  const { house } = await getPublicHouse(slug);
   if (!house) return { title: "House not found" };
   return {
     title: house.name,
@@ -50,17 +57,14 @@ export default async function HouseDetailPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const house = await prisma.house.findUnique({
-    where: { slug },
-    include: { rooms: { orderBy: { price: "asc" } } },
-  });
+  const { house } = await getPublicHouse(slug);
 
   if (!house) notFound();
 
   const availableRooms = house.rooms.filter(
     (r) => r.status === RoomStatus.AVAILABLE,
   );
-  const prices = house.rooms.map((r) => toNumber(r.price));
+  const prices = house.rooms.map((r) => r.price);
   const priceFrom = prices.length ? Math.min(...prices) : 0;
 
   const roomTypes = Array.from(new Set(house.rooms.map((r) => r.type)));
@@ -197,7 +201,7 @@ export default async function HouseDetailPage({
                           {room.floor ? ` · ${room.floor} floor` : ""}
                         </p>
                         <p className="mt-2 font-display text-lg font-semibold">
-                          {formatCurrency(toNumber(room.price))}
+                          {formatCurrency(room.price)}
                           <span className="text-xs font-normal text-muted-foreground">
                             {" "}
                             / month

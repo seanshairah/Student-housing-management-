@@ -1,6 +1,5 @@
-import { prisma } from "@/lib/prisma";
 import { RoomStatus } from "@prisma/client";
-import { toNumber } from "@/lib/utils";
+import { getPublicHouses, getStudentCount } from "@/lib/public-houses";
 import { SiteShell } from "@/components/marketing/site-shell";
 import { Hero } from "@/components/marketing/hero";
 import { StatsCounters } from "@/components/marketing/stats-counters";
@@ -23,14 +22,15 @@ const FALLBACK_IMG =
   "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=1200&q=80";
 
 export default async function HomePage() {
-  const houses = await prisma.house.findMany({
-    orderBy: { name: "asc" },
-    include: { rooms: true },
-  });
+  // Resilient fetch: never hangs on a cold DB, falls back to static house data.
+  const [{ houses }, students] = await Promise.all([
+    getPublicHouses(),
+    getStudentCount(),
+  ]);
 
   const showcase: ShowcaseHouse[] = houses.map((h) => {
     const available = h.rooms.filter((r) => r.status === RoomStatus.AVAILABLE);
-    const prices = h.rooms.map((r) => toNumber(r.price));
+    const prices = h.rooms.map((r) => r.price);
     return {
       id: h.id,
       name: h.name,
@@ -44,7 +44,7 @@ export default async function HomePage() {
   });
 
   const comparison: ComparisonHouse[] = houses.map((h) => {
-    const prices = h.rooms.map((r) => toNumber(r.price));
+    const prices = h.rooms.map((r) => r.price);
     return {
       id: h.id,
       name: h.name,
@@ -58,16 +58,16 @@ export default async function HomePage() {
 
   // Aggregate stats
   const allRooms = houses.flatMap((h) => h.rooms);
-  const totalCapacity = allRooms.reduce((sum, r) => sum + r.capacity, 0);
-  const totalOccupied = allRooms.reduce((sum, r) => sum + r.occupied, 0);
-  const students = await prisma.studentProfile.count();
+  const occupiedRooms = allRooms.filter(
+    (r) => r.status !== RoomStatus.AVAILABLE,
+  ).length;
   const stats = {
     houses: houses.length,
     totalRooms: allRooms.length,
-    occupancyPct: totalCapacity
-      ? Math.round((totalOccupied / totalCapacity) * 100)
+    occupancyPct: allRooms.length
+      ? Math.round((occupiedRooms / allRooms.length) * 100)
       : 0,
-    students,
+    students: students ?? 0,
   };
 
   return (

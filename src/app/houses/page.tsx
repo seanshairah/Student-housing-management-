@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
-import { prisma } from "@/lib/prisma";
 import { RoomStatus } from "@prisma/client";
-import { toNumber, formatCurrency } from "@/lib/utils";
+import { getPublicHouses } from "@/lib/public-houses";
+import { formatCurrency } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { MapPin, Check, ArrowUpRight } from "lucide-react";
 import { SiteShell } from "@/components/marketing/site-shell";
@@ -20,10 +20,7 @@ const FALLBACK_IMG =
   "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=1200&q=80";
 
 export default async function HousesPage() {
-  const houses = await prisma.house.findMany({
-    orderBy: { name: "asc" },
-    include: { rooms: { orderBy: { price: "asc" } } },
-  });
+  const { houses } = await getPublicHouses();
 
   return (
     <SiteShell>
@@ -50,7 +47,7 @@ export default async function HousesPage() {
             const available = house.rooms.filter(
               (r) => r.status === RoomStatus.AVAILABLE,
             );
-            const prices = house.rooms.map((r) => toNumber(r.price));
+            const prices = house.rooms.map((r) => r.price);
             const priceFrom = prices.length ? Math.min(...prices) : 0;
 
             return (
