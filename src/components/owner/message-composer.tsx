@@ -13,6 +13,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { sendOwnerMessage } from "@/app/owner/actions";
 
 const GROUPS = [
+  { value: "CUSTOM", label: "A specific student" },
   { value: "ALL_STUDENTS", label: "All students" },
   { value: "HOUSE", label: "Students in a house" },
   { value: "UNPAID", label: "Students with unpaid invoices" },
@@ -21,7 +22,13 @@ const GROUPS = [
   { value: "CARETAKERS", label: "Caretakers" },
 ];
 
-export function MessageComposer({ houses }: { houses: { id: string; name: string }[] }) {
+export function MessageComposer({
+  houses,
+  students,
+}: {
+  houses: { id: string; name: string }[];
+  students: { id: string; name: string }[];
+}) {
   const [group, setGroup] = useState("ALL_STUDENTS");
   const [email, setEmail] = useState(true);
   const [sms, setSms] = useState(false);
@@ -69,6 +76,17 @@ export function MessageComposer({ houses }: { houses: { id: string; name: string
                 <Select id="houseId" name="houseId" defaultValue={houses[0]?.id}>
                   {houses.map((h) => (
                     <option key={h.id} value={h.id}>{h.name}</option>
+                  ))}
+                </Select>
+              </div>
+            )}
+            {group === "CUSTOM" && (
+              <div className="space-y-1.5">
+                <Label htmlFor="studentId">Student</Label>
+                <Select id="studentId" name="studentId" defaultValue={students[0]?.id}>
+                  {students.length === 0 && <option value="">No students yet</option>}
+                  {students.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
                   ))}
                 </Select>
               </div>

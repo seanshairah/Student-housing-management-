@@ -112,12 +112,15 @@ export function DashboardShell({
       {/* Main column */}
       <div className={cn("transition-all duration-300", collapsed ? "lg:pl-[76px]" : "lg:pl-64")}>
         {/* Topbar */}
-        <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-3 border-b border-border bg-card px-4 lg:px-8">
+        <header className="sticky top-0 z-20 flex h-14 items-center justify-between gap-3 border-b border-border bg-card/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-card/80 lg:h-16 lg:px-8">
           <div className="flex items-center gap-2 lg:hidden">
             <div className="flex size-8 items-center justify-center rounded-lg gradient-brand text-white">
               <Icons.Home className="size-4" />
             </div>
-            <span className="font-display text-sm font-bold">{brand}</span>
+            <div className="leading-tight">
+              <span className="block font-display text-sm font-bold">{brand}</span>
+              <span className="block text-[11px] text-muted-foreground">{roleLabel}</span>
+            </div>
           </div>
           <div className="ml-auto flex items-center gap-3">
             <Link
@@ -166,28 +169,43 @@ export function DashboardShell({
           </div>
         </header>
 
-        {/* Page content */}
-        <main className="px-4 pb-28 pt-6 lg:px-8 lg:pb-10">{children}</main>
+        {/* Page content. Bottom padding clears the mobile tab bar + safe area. */}
+        <main className="px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-5 lg:px-8 lg:pb-10 lg:pt-6">
+          {children}
+        </main>
       </div>
 
-      {/* Mobile bottom nav */}
-      <nav className="fixed inset-x-0 bottom-0 z-30 flex items-stretch justify-around border-t border-border bg-card lg:hidden">
-        {mobileNav.map((item) => {
-          const active = isActive(pathname, item.href);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium transition-colors",
-                active ? "text-brand-700" : "text-muted-foreground",
-              )}
-            >
-              <Icon name={item.icon} className="size-5" />
-              <span>{item.label}</span>
-            </Link>
-          );
-        })}
+      {/* Mobile bottom tab bar — native-app style */}
+      <nav
+        className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-card/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-1px_12px_rgba(0,0,0,0.05)] backdrop-blur supports-[backdrop-filter]:bg-card/85 lg:hidden"
+        aria-label="Primary"
+      >
+        <div className="flex items-stretch justify-around">
+          {mobileNav.map((item) => {
+            const active = isActive(pathname, item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "group flex flex-1 flex-col items-center gap-1 pb-1.5 pt-2 text-[11px] font-medium transition-colors",
+                  active ? "text-brand-700" : "text-muted-foreground active:text-foreground",
+                )}
+              >
+                <span
+                  className={cn(
+                    "flex h-8 w-12 items-center justify-center rounded-full transition-colors",
+                    active ? "bg-brand-50" : "bg-transparent group-active:bg-accent",
+                  )}
+                >
+                  <Icon name={item.icon} className="size-[22px]" />
+                </span>
+                <span className="leading-none">{item.label}</span>
+              </Link>
+            );
+          })}
+        </div>
       </nav>
     </div>
   );

@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
-import { prisma } from "@/lib/prisma";
 import { RoomStatus } from "@prisma/client";
-import { toNumber } from "@/lib/utils";
+import { getPublicHouses } from "@/lib/public-houses";
 import { SiteShell } from "@/components/marketing/site-shell";
 import { BookingForm, type BookingHouse } from "./booking-form";
 
-export const dynamic = "force-dynamic";
+// ISR rather than force-dynamic: serve the booking page from cache (revalidated
+// frequently) so a visit never blocks on a live DB query. The form submission
+// itself still validates room availability server-side at apply time.
+export const revalidate = 30;
 
 export const metadata: Metadata = {
   title: "Book a Room",
@@ -20,10 +22,7 @@ export default async function BookPage({
 }) {
   const { house: houseParam, room: roomParam } = await searchParams;
 
-  const houses = await prisma.house.findMany({
-    orderBy: { name: "asc" },
-    include: { rooms: { orderBy: { price: "asc" } } },
-  });
+  const { houses } = await getPublicHouses();
 
   const data: BookingHouse[] = houses.map((h) => ({
     id: h.id,
@@ -35,7 +34,7 @@ export default async function BookPage({
       name: r.name,
       type: r.type,
       floor: r.floor,
-      price: toNumber(r.price),
+      price: r.price,
       available: r.status === RoomStatus.AVAILABLE,
     })),
   }));

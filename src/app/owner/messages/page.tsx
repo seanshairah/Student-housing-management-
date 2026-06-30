@@ -26,8 +26,13 @@ const MESSAGE_STATUS_META: Record<string, { label: string; color: string }> = {
 export default async function OwnerMessagesPage() {
   await requireRole("OWNER");
 
-  const [houses, logs, counts] = await Promise.all([
+  const [houses, students, logs, counts] = await Promise.all([
     prisma.house.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.studentProfile.findMany({
+      where: { status: { notIn: ["ARCHIVED", "MOVED_OUT"] } },
+      orderBy: { fullName: "asc" },
+      select: { id: true, fullName: true },
+    }),
     prisma.messageLog.findMany({ orderBy: { createdAt: "desc" }, take: 50 }),
     prisma.messageLog.groupBy({ by: ["status"], _count: { _all: true } }),
   ]);
@@ -53,7 +58,10 @@ export default async function OwnerMessagesPage() {
         <StatCard label="Failed" value={failed} icon="AlertTriangle" accent="rose" />
       </div>
 
-      <MessageComposer houses={houses} />
+      <MessageComposer
+        houses={houses}
+        students={students.map((s) => ({ id: s.id, name: s.fullName }))}
+      />
 
       <Card>
         <CardHeader>
