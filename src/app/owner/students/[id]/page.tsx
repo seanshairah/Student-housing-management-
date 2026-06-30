@@ -84,10 +84,10 @@ export default async function StudentDetailPage({
         </Button>
       </PageHeader>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-6 lg:grid-cols-3 [&>*]:min-w-0">
         <div className="space-y-6 lg:col-span-2">
           {/* Balance summary */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-3 gap-3 sm:gap-4 [&>*]:min-w-0">
             <Card className="p-4">
               <p className="text-xs text-muted-foreground">Total invoiced</p>
               <p className="mt-1 font-display text-xl font-bold">{formatCurrency(due)}</p>
