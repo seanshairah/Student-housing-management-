@@ -43,14 +43,18 @@ export default async function LoginPage({
 
             <LoginForm next={next} />
 
-            <div className="mt-6 rounded-xl bg-muted/60 p-3.5 text-xs text-muted-foreground">
-              <p className="mb-1.5 font-semibold text-foreground">Demo accounts</p>
-              <ul className="space-y-0.5">
-                <li>Owner — owner@studenthousing.local / owner123</li>
-                <li>Student — student@studenthousing.local / student123</li>
-                <li>Caretaker — caretaker@studenthousing.local / caretaker123</li>
-              </ul>
-            </div>
+            {/* Demo credentials are only ever rendered outside production so
+                they are never exposed on the live site. */}
+            {process.env.NODE_ENV !== "production" && (
+              <div className="mt-6 rounded-xl bg-muted/60 p-3.5 text-xs text-muted-foreground">
+                <p className="mb-1.5 font-semibold text-foreground">Demo accounts</p>
+                <ul className="space-y-0.5">
+                  <li>Owner — owner@studenthousing.local / owner123</li>
+                  <li>Student — student@studenthousing.local / student123</li>
+                  <li>Caretaker — caretaker@studenthousing.local / caretaker123</li>
+                </ul>
+              </div>
+            )}
 
             <p className="mt-6 text-center text-sm text-muted-foreground">
               Don&apos;t have a room yet?{" "}

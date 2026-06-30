@@ -1,21 +1,25 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, LogIn } from "lucide-react";
+import { Loader2, LogIn, Eye, EyeOff, AlertCircle } from "lucide-react";
 import { loginAction } from "@/app/auth/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 import type { ActionResult } from "@/types";
 
 export function LoginForm({ next }: { next?: string }) {
   const router = useRouter();
+  const [showPassword, setShowPassword] = useState(false);
   const [state, formAction, pending] = useActionState<ActionResult | null, FormData>(
     loginAction,
     null,
   );
+
+  const errorMessage = state && !state.success ? state.error : null;
 
   useEffect(() => {
     if (state?.success) {
@@ -23,13 +27,23 @@ export function LoginForm({ next }: { next?: string }) {
       toast.success("Welcome back!");
       router.push(dest);
       router.refresh();
-    } else if (state?.error) {
-      toast.error(state.error);
     }
   }, [state, router, next]);
 
   return (
     <form action={formAction} className="space-y-4">
+      {/* Persistent inline error — visible until the next submit */}
+      {errorMessage && (
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="flex items-start gap-2.5 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700"
+        >
+          <AlertCircle className="mt-0.5 size-4 shrink-0" />
+          <span>{errorMessage}</span>
+        </div>
+      )}
+
       <div className="space-y-1.5">
         <Label htmlFor="email">Email address</Label>
         <Input
@@ -39,26 +53,47 @@ export function LoginForm({ next }: { next?: string }) {
           autoComplete="email"
           placeholder="you@example.com"
           required
+          aria-invalid={errorMessage ? true : undefined}
+          className={cn(errorMessage && "border-rose-300 focus-visible:ring-rose-400")}
         />
       </div>
+
       <div className="space-y-1.5">
         <Label htmlFor="password">Password</Label>
-        <Input
-          id="password"
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          placeholder="••••••••"
-          required
-        />
+        <div className="relative">
+          <Input
+            id="password"
+            name="password"
+            type={showPassword ? "text" : "password"}
+            autoComplete="current-password"
+            placeholder="••••••••"
+            required
+            aria-invalid={errorMessage ? true : undefined}
+            className={cn(
+              "pr-11",
+              errorMessage && "border-rose-300 focus-visible:ring-rose-400",
+            )}
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword((s) => !s)}
+            aria-label={showPassword ? "Hide password" : "Show password"}
+            aria-pressed={showPassword}
+            tabIndex={-1}
+            className="absolute right-1 top-1/2 flex size-8 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+          </button>
+        </div>
       </div>
+
       <Button type="submit" variant="brand" size="lg" className="w-full" disabled={pending}>
         {pending ? (
           <Loader2 className="size-4 animate-spin" />
         ) : (
           <LogIn className="size-4" />
         )}
-        Sign in
+        {pending ? "Signing in..." : "Sign in"}
       </Button>
     </form>
   );
