@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Home, ArrowLeft } from "lucide-react";
 import { getSession, homeForRole } from "@/lib/auth";
-import { LoginForm } from "@/components/forms/login-form";
+import { LoginExperience } from "@/components/auth/login-experience";
 import { Card, CardContent } from "@/components/ui/card";
 
 export const metadata = { title: "Sign in" };
@@ -41,7 +41,7 @@ export default async function LoginPage({
               </p>
             </div>
 
-            <LoginForm next={next} />
+            <LoginExperience next={next} />
 
             {/* Demo credentials are only ever rendered outside production so
                 they are never exposed on the live site. */}

@@ -9,17 +9,34 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import type { MascotMode } from "@/components/auth/login-mascots";
 import type { ActionResult } from "@/types";
 
-export function LoginForm({ next }: { next?: string }) {
+export function LoginForm({
+  next,
+  onMode,
+}: {
+  next?: string;
+  onMode?: (mode: MascotMode) => void;
+}) {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
+  const [focused, setFocused] = useState<"email" | "password" | null>(null);
   const [state, formAction, pending] = useActionState<ActionResult | null, FormData>(
     loginAction,
     null,
   );
 
   const errorMessage = state && !state.success ? state.error : null;
+
+  // Drive the mascots: look up while filling the form, cover eyes for the
+  // password (unless it's revealed via the show-password toggle).
+  useEffect(() => {
+    if (!onMode) return;
+    if (focused === "password" && !showPassword) onMode("hidden");
+    else if (focused) onMode("typing");
+    else onMode("idle");
+  }, [focused, showPassword, onMode]);
 
   useEffect(() => {
     if (state?.success) {
@@ -53,6 +70,8 @@ export function LoginForm({ next }: { next?: string }) {
           autoComplete="email"
           placeholder="you@example.com"
           required
+          onFocus={() => setFocused("email")}
+          onBlur={() => setFocused(null)}
           aria-invalid={errorMessage ? true : undefined}
           className={cn(errorMessage && "border-rose-300 focus-visible:ring-rose-400")}
         />
@@ -68,6 +87,8 @@ export function LoginForm({ next }: { next?: string }) {
             autoComplete="current-password"
             placeholder="••••••••"
             required
+            onFocus={() => setFocused("password")}
+            onBlur={() => setFocused(null)}
             aria-invalid={errorMessage ? true : undefined}
             className={cn(
               "pr-11",
