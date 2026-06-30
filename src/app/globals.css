@@ -76,13 +76,59 @@
 }
 
 /* ── Login mascots (playful sign-in animation) ───────────────── */
-@keyframes mascot-float {
-  0%,
-  100% {
-    transform: translateY(0);
+/* Continuous whole-body motion: bounce + sway + squash in one keyframe
+   (transform-origin: bottom so the characters stay planted on the ground). */
+@keyframes mascot-idle {
+  0% {
+    transform: translateY(0) rotate(-9deg) scaleY(1);
   }
   50% {
-    transform: translateY(-4px);
+    transform: translateY(-7px) rotate(9deg) scaleY(0.9);
+  }
+  100% {
+    transform: translateY(0) rotate(-9deg) scaleY(1);
+  }
+}
+/* Entrance — each character flies in from a different direction and settles
+   with a little overshoot (the timing function provides the bounce). */
+@keyframes mascot-in-top {
+  0% {
+    opacity: 0;
+    transform: translateY(-140px) rotate(-40deg) scale(0.5);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes mascot-in-bottom {
+  0% {
+    opacity: 0;
+    transform: translateY(130px) translateX(-40px) rotate(20deg) scale(0.5);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes mascot-in-left {
+  0% {
+    opacity: 0;
+    transform: translateX(-150px) rotate(30deg) scale(0.5);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes mascot-in-right {
+  0% {
+    opacity: 0;
+    transform: translateX(150px) rotate(-30deg) scale(0.5);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
   }
 }
 @keyframes mascot-blink {
