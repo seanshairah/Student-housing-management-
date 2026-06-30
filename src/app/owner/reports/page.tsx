@@ -80,7 +80,7 @@ export default async function OwnerReportsPage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-2 [&>*]:min-w-0">
         {/* Occupancy report */}
         <Card>
           <CardHeader className="flex-row items-center justify-between space-y-0">

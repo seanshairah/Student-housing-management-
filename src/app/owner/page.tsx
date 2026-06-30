@@ -155,7 +155,7 @@ export default async function OwnerOverviewPage() {
       )}
 
       {/* Charts */}
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-3 [&>*]:min-w-0">
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Revenue (last 6 months)</CardTitle>
@@ -188,7 +188,7 @@ export default async function OwnerOverviewPage() {
       </Card>
 
       {/* Recent tables */}
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2 [&>*]:min-w-0">
         <Card>
           <CardHeader className="flex-row items-center justify-between space-y-0">
             <CardTitle>Recent payments</CardTitle>

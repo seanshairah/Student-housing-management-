@@ -99,7 +99,7 @@ export default async function OwnerServicesPage() {
                       />
                     </div>
                     <div className="mt-2 space-y-0.5 text-sm text-muted-foreground">
-                      <p>{c.phone}</p>
+                      <p className="truncate">{c.phone}</p>
                       <p className="truncate">{c.email}</p>
                     </div>
                     {c.house && (

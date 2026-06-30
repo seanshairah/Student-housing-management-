@@ -34,6 +34,9 @@
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
     -webkit-font-smoothing: antialiased;
+    /* Safety net: dashboards must never scroll sideways on mobile. Wide
+       content (tables, etc.) scrolls inside its own container instead. */
+    overflow-x: hidden;
   }
 
   html {
