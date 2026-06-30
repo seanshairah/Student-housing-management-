@@ -663,6 +663,7 @@ export async function sendOwnerMessage(
   try {
     const group = String(formData.get("group") || "") as RecipientGroup;
     const houseId = String(formData.get("houseId") || "") || undefined;
+    const studentId = String(formData.get("studentId") || "") || undefined;
     const subject = String(formData.get("subject") || "") || undefined;
     const body = String(formData.get("body") || "");
     const channelsRaw = String(formData.get("channels") || "");
@@ -673,8 +674,13 @@ export async function sendOwnerMessage(
       .map((c) => c.trim())
       .filter(Boolean) as NotificationChannel[];
     if (!channels.length) throw new Error("Choose at least one channel");
+    if (group === "CUSTOM" && !studentId)
+      throw new Error("Choose a student to message");
 
-    const recipients = await resolveRecipients(group, { houseId });
+    const recipients = await resolveRecipients(group, {
+      houseId,
+      ids: studentId ? [studentId] : undefined,
+    });
     if (!recipients.length) throw new Error("No recipients match this group");
 
     const result = await sendMessage({

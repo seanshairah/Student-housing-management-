@@ -35,6 +35,9 @@ export const viewport: Viewport = {
   themeColor: "#157857",
   width: "device-width",
   initialScale: 1,
+  // Let content extend under the notch / home indicator so the bottom tab bar
+  // can use env(safe-area-inset-*) and feel like a native app.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
