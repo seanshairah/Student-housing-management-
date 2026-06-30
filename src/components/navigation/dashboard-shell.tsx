@@ -113,13 +113,13 @@ export function DashboardShell({
       <div className={cn("transition-all duration-300", collapsed ? "lg:pl-[76px]" : "lg:pl-64")}>
         {/* Topbar */}
         <header className="sticky top-0 z-20 flex h-14 items-center justify-between gap-3 border-b border-border bg-card/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-card/80 lg:h-16 lg:px-8">
-          <div className="flex items-center gap-2 lg:hidden">
-            <div className="flex size-8 items-center justify-center rounded-lg gradient-brand text-white">
+          <div className="flex min-w-0 items-center gap-2 lg:hidden">
+            <div className="flex size-8 shrink-0 items-center justify-center rounded-lg gradient-brand text-white">
               <Icons.Home className="size-4" />
             </div>
-            <div className="leading-tight">
-              <span className="block font-display text-sm font-bold">{brand}</span>
-              <span className="block text-[11px] text-muted-foreground">{roleLabel}</span>
+            <div className="min-w-0 leading-tight">
+              <span className="block truncate font-display text-sm font-bold">{brand}</span>
+              <span className="block truncate text-[11px] text-muted-foreground">{roleLabel}</span>
             </div>
           </div>
           <div className="ml-auto flex items-center gap-3">

@@ -143,21 +143,21 @@ export default async function OwnerSettingsPage() {
               <CardTitle>Document numbering</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Next invoice</span>
-                <span className="font-mono">
+              <div className="flex items-center justify-between gap-3">
+                <span className="shrink-0 text-muted-foreground">Next invoice</span>
+                <span className="truncate font-mono">
                   {settings.invoicePrefix}-{String(settings.invoiceCounter + 1).padStart(5, "0")}
                 </span>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Next receipt</span>
-                <span className="font-mono">
+              <div className="flex items-center justify-between gap-3">
+                <span className="shrink-0 text-muted-foreground">Next receipt</span>
+                <span className="truncate font-mono">
                   {settings.receiptPrefix}-{String(settings.receiptCounter + 1).padStart(5, "0")}
                 </span>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Next statement</span>
-                <span className="font-mono">
+              <div className="flex items-center justify-between gap-3">
+                <span className="shrink-0 text-muted-foreground">Next statement</span>
+                <span className="truncate font-mono">
                   {settings.statementPrefix}-{String(settings.statementCounter + 1).padStart(5, "0")}
                 </span>
               </div>
