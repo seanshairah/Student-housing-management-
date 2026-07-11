@@ -8,8 +8,8 @@ import {
   type Prisma,
 } from "@prisma/client";
 import { generateReference, formatCurrency, formatDate, toNumber } from "@/lib/utils";
-import { createPaynowPayment } from "./paynow";
-import { updateInvoiceAfterPayment } from "@/services/invoices";
+import { createPaynowPayment, createPaynowMobilePayment, type MobileMethod } from "./paynow";
+import { updateInvoiceAfterPayment, createInvoice } from "@/services/invoices";
 import { createReceipt } from "@/services/receipts";
 import { sendTemplatedEmail } from "@/services/email";
 import { sendStatusSMS } from "@/services/sms";
@@ -93,6 +93,80 @@ export async function generatePaymentLink(
   });
 
   return { payment, redirectUrl: paynow.redirectUrl };
+}
+
+/**
+ * Start an EcoCash / OneMoney mobile payment for an ad-hoc charge (e.g. next
+ * month's rent, next semester's rent, transport). Creates an Invoice + Payment,
+ * pushes the USSD prompt to the payer's phone, and returns a reference the
+ * client can poll until it settles.
+ */
+export async function startMobilePayment(opts: {
+  studentProfileId: string;
+  amount: number;
+  description: string;
+  phone: string;
+  method: MobileMethod;
+}) {
+  const student = await prisma.studentProfile.findUnique({
+    where: { id: opts.studentProfileId },
+  });
+  if (!student) throw new Error("Student not found");
+
+  const reference = generateReference("PAY");
+  const invoice = await createInvoice({
+    studentProfileId: opts.studentProfileId,
+    description: opts.description,
+    amount: opts.amount,
+    dueInDays: 7,
+  });
+
+  const result = await createPaynowMobilePayment({
+    reference,
+    amount: opts.amount,
+    email: student.email,
+    phone: opts.phone,
+    method: opts.method,
+    description: opts.description,
+  });
+
+  await prisma.payment.create({
+    data: {
+      reference,
+      studentProfileId: opts.studentProfileId,
+      invoiceId: invoice.id,
+      amount: opts.amount,
+      status: PaymentStatus.PENDING,
+      transaction: {
+        create: {
+          provider: "paynow",
+          pollUrl: result.pollUrl,
+          providerRef: result.providerRef,
+          rawStatus: result.status ?? (result.ok ? "sent" : "error"),
+        },
+      },
+    },
+  });
+
+  await audit({
+    action: "payment.mobile_initiated",
+    entityType: "Payment",
+    metadata: {
+      reference,
+      amount: opts.amount,
+      method: opts.method,
+      mode: result.mode,
+      ok: result.ok,
+    },
+  });
+
+  return {
+    reference,
+    ok: result.ok,
+    instructions: result.instructions,
+    error: result.error,
+    mode: result.mode,
+  };
 }
 
 /**

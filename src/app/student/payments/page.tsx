@@ -6,6 +6,9 @@ import {
   FileText,
   Receipt as ReceiptIcon,
   ArrowRight,
+  CalendarClock,
+  CalendarRange,
+  Bus,
 } from "lucide-react";
 import { requireRole } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
@@ -31,7 +34,8 @@ import {
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/ui/misc";
 import { PayButton } from "@/components/student/pay-button";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { MobilePaymentDialog } from "@/components/student/mobile-payment-dialog";
+import { formatCurrency, formatDate, toNumber } from "@/lib/utils";
 import { PAYMENT_STATUS_META, INVOICE_STATUS_META } from "@/constants";
 import { PaymentStatus } from "@prisma/client";
 
@@ -39,6 +43,7 @@ export default async function StudentPaymentsPage() {
   const session = await requireRole("STUDENT");
   const profile = await prisma.studentProfile.findUnique({
     where: { userId: session.userId },
+    include: { room: true },
   });
 
   if (!profile) {
@@ -68,6 +73,7 @@ export default async function StudentPaymentsPage() {
   ]);
 
   const pending = payments.filter((p) => p.status === PaymentStatus.PENDING);
+  const roomPrice = profile.room ? toNumber(profile.room.price) : 0;
 
   return (
     <div className="space-y-6">
@@ -95,6 +101,53 @@ export default async function StudentPaymentsPage() {
           hint={balance.balance > 0 ? "Outstanding" : "Settled"}
         />
       </div>
+
+      {/* Make a payment — EcoCash / OneMoney express checkout */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Make a payment</CardTitle>
+          <CardDescription>
+            Pay by EcoCash or OneMoney — you&apos;ll get a prompt on your phone
+            to approve.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 sm:grid-cols-3">
+          <MobilePaymentDialog
+            purpose="rent_month"
+            title="Pay next month's rent"
+            triggerLabel="Next month's rent"
+            triggerIcon={<CalendarClock className="size-4" />}
+            triggerClassName="h-auto w-full flex-col items-start gap-1 py-3 text-left"
+            amount={roomPrice}
+            defaultPhone={profile.phone}
+          />
+          <MobilePaymentDialog
+            purpose="rent_semester"
+            title="Pay next semester's rent"
+            triggerLabel="Next semester's rent"
+            triggerIcon={<CalendarRange className="size-4" />}
+            triggerClassName="h-auto w-full flex-col items-start gap-1 py-3 text-left"
+            amount={roomPrice * 6}
+            defaultPhone={profile.phone}
+          />
+          <MobilePaymentDialog
+            purpose="transport"
+            title="Pay transport service"
+            triggerLabel="Transport service"
+            triggerIcon={<Bus className="size-4" />}
+            triggerClassName="h-auto w-full flex-col items-start gap-1 py-3 text-left"
+            defaultPhone={profile.phone}
+          />
+        </CardContent>
+        {roomPrice <= 0 && (
+          <CardContent className="pt-0">
+            <p className="text-xs text-muted-foreground">
+              Rent amounts appear once you have a room assigned. Transport is
+              available to pay any time.
+            </p>
+          </CardContent>
+        )}
+      </Card>
 
       {/* Pending payment requests */}
       {pending.length > 0 && (
