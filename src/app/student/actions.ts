@@ -3,10 +3,15 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/session";
-import { settlePayment } from "@/services/payments";
+import {
+  settlePayment,
+  startMobilePayment,
+  verifyPaynowPayment,
+  type MobileMethod,
+} from "@/services/payments";
 import { requestRenewal } from "@/services/applications";
 import { notifyOwners } from "@/services/notifications";
-import { generateReference } from "@/lib/utils";
+import { generateReference, toNumber } from "@/lib/utils";
 import { serviceRequestSchema } from "@/lib/validators";
 import {
   NotificationChannel,
@@ -49,6 +54,121 @@ export async function requestRenewalAction(
   } catch (e) {
     return { success: false, error: (e as Error).message };
   }
+}
+
+/** Number of months billed for a "semester" rent payment. */
+const SEMESTER_MONTHS = 6;
+
+export type PayPurpose = "rent_month" | "rent_semester" | "transport";
+
+export interface MobilePayResult {
+  success: boolean;
+  error?: string;
+  reference?: string;
+  instructions?: string;
+  amount?: number;
+  testMode?: boolean;
+}
+
+/**
+ * Start an EcoCash / OneMoney payment for rent (next month / next semester) or
+ * transport. Pushes a USSD prompt to the entered phone number.
+ */
+export async function initiateMobilePaymentAction(input: {
+  purpose: PayPurpose;
+  phone: string;
+  method: MobileMethod;
+  amount?: number; // used for transport (student-entered)
+}): Promise<MobilePayResult> {
+  const session = await requireRole("STUDENT");
+  try {
+    const profile = await prisma.studentProfile.findUnique({
+      where: { userId: session.userId },
+      include: { room: true },
+    });
+    if (!profile) return { success: false, error: "No student profile found." };
+
+    const digits = (input.phone || "").replace(/\D/g, "");
+    if (digits.length < 9)
+      return { success: false, error: "Enter a valid mobile number." };
+    if (input.method !== "ecocash" && input.method !== "onemoney")
+      return { success: false, error: "Choose a payment method." };
+
+    const roomPrice = profile.room ? toNumber(profile.room.price) : 0;
+    let amount = 0;
+    let description = "";
+
+    if (input.purpose === "rent_month") {
+      amount = roomPrice;
+      description = `Rent — next month${profile.room ? ` (Room ${profile.room.number})` : ""}`;
+    } else if (input.purpose === "rent_semester") {
+      amount = roomPrice * SEMESTER_MONTHS;
+      description = `Rent — next semester (${SEMESTER_MONTHS} months)`;
+    } else {
+      amount = Math.round(Number(input.amount || 0) * 100) / 100;
+      description = "Transport service";
+    }
+
+    if (!amount || amount <= 0) {
+      return {
+        success: false,
+        error:
+          input.purpose === "transport"
+            ? "Enter the transport amount."
+            : "No rent amount is set for your room — please contact the owner.",
+      };
+    }
+
+    const res = await startMobilePayment({
+      studentProfileId: profile.id,
+      amount,
+      description,
+      phone: input.phone,
+      method: input.method,
+    });
+
+    if (!res.ok)
+      return { success: false, error: res.error ?? "Could not start the payment." };
+
+    return {
+      success: true,
+      reference: res.reference,
+      instructions: res.instructions,
+      amount,
+      testMode: res.mode === "development",
+    };
+  } catch (e) {
+    return { success: false, error: (e as Error).message };
+  }
+}
+
+/** Poll the status of a mobile payment; settles it when Paynow reports paid. */
+export async function checkMobilePaymentAction(
+  reference: string,
+): Promise<{ status: "paid" | "pending" | "failed"; error?: string }> {
+  await requireRole("STUDENT");
+  const payment = await prisma.payment.findUnique({
+    where: { reference },
+    include: { transaction: true },
+  });
+  if (!payment) return { status: "failed", error: "Payment not found." };
+  if (payment.status === "PAID") return { status: "paid" };
+  if (payment.status === "FAILED") return { status: "failed" };
+
+  const pollUrl = payment.transaction?.pollUrl;
+  if (!pollUrl) return { status: "pending" };
+
+  const v = await verifyPaynowPayment(pollUrl);
+  if (v.paid) {
+    await settlePayment(reference).catch(() => undefined);
+    revalidatePath("/student/payments");
+    revalidatePath("/student");
+    return { status: "paid" };
+  }
+  if (/cancel|fail|disputed|refunded/i.test(v.status)) {
+    return { status: "failed", error: v.status };
+  }
+  return { status: "pending" };
 }
 
 /** Mock "Pay now" — settle the payment immediately (idempotent). */
