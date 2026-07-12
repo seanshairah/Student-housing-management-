@@ -66,18 +66,20 @@ export interface MobilePayResult {
   error?: string;
   reference?: string;
   instructions?: string;
+  redirectUrl?: string;
   amount?: number;
   testMode?: boolean;
 }
 
 /**
- * Start an EcoCash / OneMoney payment for rent (next month / next semester) or
- * transport. Pushes a USSD prompt to the entered phone number.
+ * Start a payment for rent (next month / next semester) or transport. Either
+ * pushes an EcoCash/OneMoney USSD prompt to the entered number, or (method:
+ * "web") returns a Paynow hosted-checkout URL to redirect to.
  */
 export async function initiateMobilePaymentAction(input: {
   purpose: PayPurpose;
-  phone: string;
-  method: MobileMethod;
+  phone?: string;
+  method: MobileMethod | "web";
   amount?: number; // used for transport (student-entered)
 }): Promise<MobilePayResult> {
   const session = await requireRole("STUDENT");
@@ -88,11 +90,14 @@ export async function initiateMobilePaymentAction(input: {
     });
     if (!profile) return { success: false, error: "No student profile found." };
 
-    const digits = (input.phone || "").replace(/\D/g, "");
-    if (digits.length < 9)
-      return { success: false, error: "Enter a valid mobile number." };
-    if (input.method !== "ecocash" && input.method !== "onemoney")
-      return { success: false, error: "Choose a payment method." };
+    const isWeb = input.method === "web";
+    if (!isWeb) {
+      const digits = (input.phone || "").replace(/\D/g, "");
+      if (digits.length < 9)
+        return { success: false, error: "Enter a valid mobile number." };
+      if (input.method !== "ecocash" && input.method !== "onemoney")
+        return { success: false, error: "Choose a payment method." };
+    }
 
     const roomPrice = profile.room ? toNumber(profile.room.price) : 0;
     let amount = 0;
@@ -134,6 +139,7 @@ export async function initiateMobilePaymentAction(input: {
       success: true,
       reference: res.reference,
       instructions: res.instructions,
+      redirectUrl: res.redirectUrl,
       amount,
       testMode: res.mode === "development",
     };
@@ -185,14 +191,26 @@ export async function payNowAction(reference: string): Promise<ActionResult> {
   }
 }
 
-/** Verify/settle the payment on the return page. Idempotent. */
+/** Verify/settle the payment on the return page. Idempotent. Polls Paynow
+ *  first so a user returning without paying isn't falsely marked paid. */
 export async function confirmPaymentReturn(
   reference: string,
 ): Promise<ActionResult> {
   await requireRole("STUDENT");
   if (!reference) return { success: false, error: "Missing payment reference" };
   try {
-    await settlePayment(reference);
+    const payment = await prisma.payment.findUnique({
+      where: { reference },
+      include: { transaction: true },
+    });
+    if (!payment) return { success: false, error: "Payment not found" };
+    if (payment.status !== "PAID") {
+      const pollUrl = payment.transaction?.pollUrl;
+      if (pollUrl) {
+        const v = await verifyPaynowPayment(pollUrl);
+        if (v.paid) await settlePayment(reference);
+      }
+    }
     revalidatePath("/student/payments");
     revalidatePath("/student");
     return { success: true };
