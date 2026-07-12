@@ -248,13 +248,10 @@ export async function settlePayment(reference: string) {
     const r = await createReceipt(payment.id, toNumber(payment.amount), tx);
     if (payment.invoiceId) {
       await updateInvoiceAfterPayment(payment.invoiceId, tx);
-      // Advance any linked application to PAID.
-      const inv = await tx.invoice.findUnique({
-        where: { id: payment.invoiceId },
-      });
-      if (inv?.applicationId) {
+      // Advance any linked application to PAID (invoice already loaded above).
+      if (payment.invoice?.applicationId) {
         const app = await tx.application.update({
-          where: { id: inv.applicationId },
+          where: { id: payment.invoice.applicationId },
           data: { status: ApplicationStatus.PAID },
         });
 
@@ -319,7 +316,10 @@ export async function settlePayment(reference: string) {
       data: { status: StudentStatus.ACTIVE },
     });
     return r;
-  });
+  },
+  // Neon is a remote/serverless DB, so the several sequential writes here can
+  // exceed Prisma's default 5s interactive-transaction timeout. Give it room.
+  { maxWait: 10000, timeout: 20000 });
 
   // Notifications (best-effort, outside the transaction).
   await sendTemplatedEmail(
