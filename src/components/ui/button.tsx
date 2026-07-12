@@ -28,6 +28,16 @@ const buttonVariants = cva(
         icon: "h-10 w-10",
       },
     },
+    compoundVariants: [
+      // Icon-only ghost buttons (e.g. table row actions) otherwise have no
+      // chrome at rest and read as "invisible until you hover". Give them a
+      // subtle always-visible affordance so they're clearly clickable.
+      {
+        variant: "ghost",
+        size: "icon",
+        className: "bg-muted/60 text-muted-foreground",
+      },
+    ],
     defaultVariants: { variant: "default", size: "default" },
   },
 );
