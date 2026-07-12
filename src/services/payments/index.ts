@@ -105,8 +105,8 @@ export async function startMobilePayment(opts: {
   studentProfileId: string;
   amount: number;
   description: string;
-  phone: string;
-  method: MobileMethod;
+  phone?: string;
+  method: MobileMethod | "web";
 }) {
   const student = await prisma.studentProfile.findUnique({
     where: { id: opts.studentProfileId },
@@ -121,11 +121,57 @@ export async function startMobilePayment(opts: {
     dueInDays: 7,
   });
 
+  // ── Web redirect (Paynow hosted checkout — card / EcoCash / other) ──
+  if (opts.method === "web") {
+    const result = await createPaynowPayment({
+      reference,
+      amount: opts.amount,
+      email: student.email,
+      description: opts.description,
+    });
+    await prisma.payment.create({
+      data: {
+        reference,
+        studentProfileId: opts.studentProfileId,
+        invoiceId: invoice.id,
+        amount: opts.amount,
+        status: PaymentStatus.PENDING,
+        paymentLink: result.redirectUrl,
+        transaction: {
+          create: {
+            provider: "paynow",
+            pollUrl: result.pollUrl,
+            providerRef: result.providerRef,
+            rawStatus: result.ok
+              ? result.mode === "development"
+                ? "mock-initiated"
+                : "initiated"
+              : result.error ?? "error",
+          },
+        },
+      },
+    });
+    await audit({
+      action: "payment.web_initiated",
+      entityType: "Payment",
+      metadata: { reference, amount: opts.amount, mode: result.mode, ok: result.ok, error: result.error ?? null },
+    });
+    return {
+      reference,
+      ok: result.ok,
+      redirectUrl: result.redirectUrl,
+      instructions: undefined as string | undefined,
+      error: result.error,
+      mode: result.mode,
+    };
+  }
+
+  // ── EcoCash / OneMoney express (USSD phone prompt) ──
   const result = await createPaynowMobilePayment({
     reference,
     amount: opts.amount,
     email: student.email,
-    phone: opts.phone,
+    phone: opts.phone ?? "",
     method: opts.method,
     description: opts.description,
   });
@@ -168,6 +214,7 @@ export async function startMobilePayment(opts: {
     reference,
     ok: result.ok,
     instructions: result.instructions,
+    redirectUrl: undefined as string | undefined,
     error: result.error,
     mode: result.mode,
   };

@@ -18,6 +18,13 @@ export interface PaynowConfig {
   integrationKey: string;
   returnUrl: string;
   resultUrl: string;
+  /**
+   * When the Paynow integration is in TEST mode, Paynow rejects a request
+   * unless `authemail` equals the merchant's registered email. Set
+   * PAYNOW_AUTH_EMAIL to that email while testing; leave it blank in live so
+   * each payer's own email is used.
+   */
+  authEmail: string;
   mode: "development" | "live";
 }
 
@@ -27,6 +34,7 @@ export function getPaynowConfig(): PaynowConfig {
     integrationKey: process.env.PAYNOW_INTEGRATION_KEY || "",
     returnUrl: process.env.PAYNOW_RETURN_URL || "http://localhost:3000/student/payments/return",
     resultUrl: process.env.PAYNOW_RESULT_URL || "http://localhost:3000/api/payments/paynow/result",
+    authEmail: process.env.PAYNOW_AUTH_EMAIL || "",
     mode:
       process.env.PAYNOW_MODE === "live" &&
       process.env.PAYNOW_INTEGRATION_ID &&
@@ -106,14 +114,15 @@ export async function createPaynowPayment(
   }
 
   try {
+    const returnUrl = `${config.returnUrl}${config.returnUrl.includes("?") ? "&" : "?"}ref=${encodeURIComponent(input.reference)}`;
     const values: Record<string, string> = {
       id: config.integrationId,
       reference: input.reference,
       amount: input.amount.toFixed(2),
       additionalinfo: input.description,
-      returnurl: config.returnUrl,
+      returnurl: returnUrl,
       resulturl: config.resultUrl,
-      authemail: input.email,
+      authemail: config.authEmail || input.email,
       status: "Message",
     };
     values.hash = paynowHash(values, config.integrationKey);
@@ -201,7 +210,7 @@ export async function createPaynowMobilePayment(
       additionalinfo: input.description,
       returnurl: config.returnUrl,
       resulturl: config.resultUrl,
-      authemail: input.email,
+      authemail: config.authEmail || input.email,
       phone,
       method: input.method,
       status: "Message",

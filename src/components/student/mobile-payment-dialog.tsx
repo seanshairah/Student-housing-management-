@@ -3,7 +3,13 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Loader2, Smartphone, CheckCircle2, ArrowRight } from "lucide-react";
+import {
+  Loader2,
+  Smartphone,
+  CheckCircle2,
+  ArrowRight,
+  ArrowUpRight,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -57,6 +63,7 @@ export function MobilePaymentDialog({
   const [instructions, setInstructions] = React.useState("");
   const [errorMsg, setErrorMsg] = React.useState("");
   const [busy, setBusy] = React.useState(false);
+  const [webBusy, setWebBusy] = React.useState(false);
   const pollRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
 
   const editableAmount = amount === undefined;
@@ -95,6 +102,22 @@ export function MobilePaymentDialog({
     setInstructions(res.instructions ?? "Check your phone to approve the payment.");
     setPhase("waiting");
     startPolling(res.reference);
+  }
+
+  async function payOnline() {
+    setWebBusy(true);
+    setErrorMsg("");
+    const res = await initiateMobilePaymentAction({
+      purpose,
+      method: "web",
+      amount: editableAmount ? Number(customAmount) : amount,
+    });
+    if (res.success && res.redirectUrl) {
+      window.location.href = res.redirectUrl;
+      return; // navigating away
+    }
+    setWebBusy(false);
+    setErrorMsg(res.error ?? "Could not open the payment page.");
   }
 
   function startPolling(reference: string) {
@@ -215,6 +238,26 @@ export function MobilePaymentDialog({
                 {busy
                   ? "Sending prompt…"
                   : `Send prompt${resolvedAmount ? ` · ${formatCurrency(resolvedAmount)}` : ""}`}
+              </Button>
+
+              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                <span className="h-px flex-1 bg-border" />
+                or
+                <span className="h-px flex-1 bg-border" />
+              </div>
+
+              <Button
+                variant="outline"
+                className="w-full"
+                disabled={busy || webBusy}
+                onClick={payOnline}
+              >
+                {webBusy ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <ArrowUpRight className="size-4" />
+                )}
+                Pay online (card / other)
               </Button>
             </div>
           </>
