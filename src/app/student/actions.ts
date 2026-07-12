@@ -4,9 +4,8 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/session";
 import {
-  settlePayment,
   startMobilePayment,
-  verifyPaynowPayment,
+  verifyAndSettle,
   type MobileMethod,
 } from "@/services/payments";
 import { requestRenewal } from "@/services/applications";
@@ -110,8 +109,16 @@ export async function initiateMobilePaymentAction(input: {
       amount = roomPrice * SEMESTER_MONTHS;
       description = `Rent — next semester (${SEMESTER_MONTHS} months)`;
     } else {
+      // Transport is student-chosen, but validate + clamp server-side so the
+      // client can never submit a zero, negative, or absurd amount.
       amount = Math.round(Number(input.amount || 0) * 100) / 100;
       description = "Transport service";
+      if (!Number.isFinite(amount) || amount < 1 || amount > 1000) {
+        return {
+          success: false,
+          error: "Enter a transport amount between $1 and $1000.",
+        };
+      }
     }
 
     if (!amount || amount <= 0) {
@@ -153,39 +160,38 @@ export async function checkMobilePaymentAction(
   reference: string,
 ): Promise<{ status: "paid" | "pending" | "failed"; error?: string }> {
   await requireRole("STUDENT");
-  const payment = await prisma.payment.findUnique({
-    where: { reference },
-    include: { transaction: true },
-  });
-  if (!payment) return { status: "failed", error: "Payment not found." };
-  if (payment.status === "PAID") return { status: "paid" };
-  if (payment.status === "FAILED") return { status: "failed" };
-
-  const pollUrl = payment.transaction?.pollUrl;
-  if (!pollUrl) return { status: "pending" };
-
-  const v = await verifyPaynowPayment(pollUrl);
-  if (v.paid) {
-    await settlePayment(reference).catch(() => undefined);
+  const r = await verifyAndSettle(reference);
+  if (r.status === "paid") {
     revalidatePath("/student/payments");
     revalidatePath("/student");
-    return { status: "paid" };
   }
-  if (/cancel|fail|disputed|refunded/i.test(v.status)) {
-    return { status: "failed", error: v.status };
-  }
-  return { status: "pending" };
+  return {
+    status: r.status,
+    error: r.status === "failed" ? r.providerStatus : undefined,
+  };
 }
 
-/** Mock "Pay now" — settle the payment immediately (idempotent). */
+/**
+ * Checkout "Pay now". Verifies the payment against Paynow before settling — it
+ * NEVER blindly marks a payment paid. In development the mock poll returns paid
+ * (so the simulated checkout completes); in live it only settles once Paynow
+ * actually confirms, so this button can't be used to settle for free.
+ */
 export async function payNowAction(reference: string): Promise<ActionResult> {
   await requireRole("STUDENT");
   if (!reference) return { success: false, error: "Missing payment reference" };
   try {
-    await settlePayment(reference);
+    const r = await verifyAndSettle(reference);
     revalidatePath("/student/payments");
     revalidatePath("/student");
-    return { success: true };
+    if (r.status === "paid") return { success: true };
+    if (r.status === "failed")
+      return { success: false, error: r.providerStatus ?? "Payment failed." };
+    return {
+      success: false,
+      error:
+        "We haven't received confirmation from Paynow yet. If you've completed the payment, give it a moment and try again.",
+    };
   } catch (e) {
     return { success: false, error: (e as Error).message };
   }
@@ -199,18 +205,7 @@ export async function confirmPaymentReturn(
   await requireRole("STUDENT");
   if (!reference) return { success: false, error: "Missing payment reference" };
   try {
-    const payment = await prisma.payment.findUnique({
-      where: { reference },
-      include: { transaction: true },
-    });
-    if (!payment) return { success: false, error: "Payment not found" };
-    if (payment.status !== "PAID") {
-      const pollUrl = payment.transaction?.pollUrl;
-      if (pollUrl) {
-        const v = await verifyPaynowPayment(pollUrl);
-        if (v.paid) await settlePayment(reference);
-      }
-    }
+    await verifyAndSettle(reference);
     revalidatePath("/student/payments");
     revalidatePath("/student");
     return { success: true };
