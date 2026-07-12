@@ -8,7 +8,12 @@ import {
   type Prisma,
 } from "@prisma/client";
 import { generateReference, formatCurrency, formatDate, toNumber } from "@/lib/utils";
-import { createPaynowPayment, createPaynowMobilePayment, type MobileMethod } from "./paynow";
+import {
+  createPaynowPayment,
+  createPaynowMobilePayment,
+  verifyPaynowPayment,
+  type MobileMethod,
+} from "./paynow";
 import { updateInvoiceAfterPayment, createInvoice } from "@/services/invoices";
 import { createReceipt } from "@/services/receipts";
 import { sendTemplatedEmail } from "@/services/email";
@@ -380,4 +385,39 @@ export async function failPayment(reference: string, reason?: string) {
     where: { id: payment.id },
     data: { status: PaymentStatus.FAILED, transaction: { update: { rawStatus: reason } } },
   });
+}
+
+/**
+ * Authoritatively check a payment against Paynow and settle/fail it.
+ *
+ * This is the single source of truth for whether a payment is paid — it
+ * re-polls Paynow's pollUrl rather than trusting any caller-supplied status.
+ * Use it from the client poll, the return page, AND the (unauthenticated)
+ * server-to-server webhook, so a forged "Paid" callback can never settle a
+ * payment that Paynow hasn't actually confirmed. Idempotent.
+ */
+export async function verifyAndSettle(
+  reference: string,
+): Promise<{ status: "paid" | "pending" | "failed"; providerStatus?: string }> {
+  const payment = await prisma.payment.findUnique({
+    where: { reference },
+    include: { transaction: true },
+  });
+  if (!payment) return { status: "failed" };
+  if (payment.status === PaymentStatus.PAID) return { status: "paid" };
+  if (payment.status === PaymentStatus.FAILED) return { status: "failed" };
+
+  const pollUrl = payment.transaction?.pollUrl;
+  if (!pollUrl) return { status: "pending" };
+
+  const v = await verifyPaynowPayment(pollUrl);
+  if (v.paid) {
+    await settlePayment(reference);
+    return { status: "paid", providerStatus: v.status };
+  }
+  if (/cancel|fail|disputed|refunded/i.test(v.status)) {
+    await failPayment(reference, v.status);
+    return { status: "failed", providerStatus: v.status };
+  }
+  return { status: "pending", providerStatus: v.status };
 }

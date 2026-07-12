@@ -1,12 +1,17 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { parsePaynowResult, settlePayment, failPayment } from "@/services/payments";
+import { parsePaynowResult, verifyAndSettle } from "@/services/payments";
 
 /**
  * Paynow server-to-server result webhook.
  *
- * Accepts either application/x-www-form-urlencoded or JSON. Always returns
- * 200 "ok" so Paynow does not retry indefinitely on bad input; errors are
- * logged instead of thrown. No auth — this is a server-to-server callback.
+ * SECURITY: this endpoint is unauthenticated and the POST body is attacker-
+ * controllable, so we NEVER trust its `status`. We only take the `reference`
+ * from it and then re-poll Paynow authoritatively (`verifyAndSettle`) to decide
+ * whether the payment is really paid. A forged "status=Paid" cannot settle a
+ * payment that Paynow hasn't actually confirmed.
+ *
+ * Accepts form-urlencoded (Paynow default) or JSON. Always returns 200 "ok"
+ * so Paynow does not retry indefinitely; errors are logged, never thrown.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -17,7 +22,6 @@ export async function POST(req: NextRequest) {
       const json = await req.json().catch(() => ({}));
       body = normalize(json);
     } else {
-      // form-urlencoded (default for Paynow) or anything else.
       const text = await req.text();
       const params = new URLSearchParams(text);
       params.forEach((value, key) => {
@@ -26,17 +30,13 @@ export async function POST(req: NextRequest) {
     }
 
     const result = parsePaynowResult(body);
-
     if (!result.reference) {
       console.error("[paynow/result] Missing reference in payload", body);
       return new NextResponse("ok");
     }
 
-    if (result.paid) {
-      await settlePayment(result.reference);
-    } else {
-      await failPayment(result.reference, result.status);
-    }
+    // Re-poll Paynow as the source of truth; ignore the POSTed status.
+    await verifyAndSettle(result.reference);
 
     return new NextResponse("ok");
   } catch (err) {
