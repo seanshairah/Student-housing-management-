@@ -381,10 +381,63 @@ export async function settlePayment(reference: string) {
 export async function failPayment(reference: string, reason?: string) {
   const payment = await prisma.payment.findUnique({ where: { reference } });
   if (!payment) return null;
+  // State-machine safety: a settled payment must never be downgraded by a late
+  // or out-of-order "failed" signal (SUCCEEDED -> FAILED is not allowed).
+  if (payment.status === PaymentStatus.PAID) return payment;
   return prisma.payment.update({
     where: { id: payment.id },
     data: { status: PaymentStatus.FAILED, transaction: { update: { rawStatus: reason } } },
   });
+}
+
+/**
+ * Return a Paynow hosted-checkout URL to redirect the payer to (the "web"
+ * flow). Reuses an existing Paynow browserurl if the payment already has one;
+ * otherwise initiates a fresh hosted checkout for this payment and stores the
+ * link + poll URL. Returns an error message (from Paynow) when it can't.
+ */
+export async function ensurePaynowCheckoutUrl(
+  reference: string,
+): Promise<{ url?: string; error?: string }> {
+  const payment = await prisma.payment.findUnique({
+    where: { reference },
+    include: { studentProfile: true, invoice: true, transaction: true },
+  });
+  if (!payment) return { error: "Payment not found." };
+  if (payment.status === PaymentStatus.PAID) return { error: "already-paid" };
+
+  // Reuse an existing Paynow hosted URL if we already have one.
+  if (payment.paymentLink && /paynow\.co\.zw/i.test(payment.paymentLink)) {
+    return { url: payment.paymentLink };
+  }
+
+  const r = await createPaynowPayment({
+    reference: payment.reference,
+    amount: toNumber(payment.amount),
+    email: payment.studentProfile.email,
+    description: payment.invoice?.description ?? "Accommodation payment",
+  });
+  if (!r.ok || !r.redirectUrl) {
+    return { error: r.error ?? "Could not open the Paynow checkout page." };
+  }
+
+  await prisma.payment
+    .update({
+      where: { id: payment.id },
+      data: {
+        paymentLink: r.redirectUrl,
+        transaction: {
+          update: {
+            pollUrl: r.pollUrl ?? payment.transaction?.pollUrl ?? undefined,
+            providerRef: r.providerRef ?? payment.transaction?.providerRef ?? undefined,
+            rawStatus: "web-initiated",
+          },
+        },
+      },
+    })
+    .catch(() => undefined);
+
+  return { url: r.redirectUrl };
 }
 
 /**
