@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { CheckCircle2, CreditCard, Info } from "lucide-react";
+import { redirect } from "next/navigation";
+import { CheckCircle2, CreditCard, Info, AlertTriangle } from "lucide-react";
 import { requireRole } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
-import { getPaynowConfig } from "@/services/payments";
+import { getPaynowConfig, ensurePaynowCheckoutUrl } from "@/services/payments";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -55,6 +56,16 @@ export default async function CheckoutPage({
   const amount = Number(payment.amount);
   const alreadyPaid = payment.status === PaymentStatus.PAID;
   const description = payment.invoice?.description ?? "Accommodation payment";
+
+  // In LIVE mode we never show the internal simulator — we send the student to
+  // Paynow's hosted checkout page (which works even while the integration is in
+  // test mode). Only fall through to an error card if Paynow can't open it.
+  let checkoutError: string | null = null;
+  if (!alreadyPaid && config.mode === "live") {
+    const { url, error } = await ensurePaynowCheckoutUrl(payment.reference);
+    if (url) redirect(url);
+    if (error && error !== "already-paid") checkoutError = error;
+  }
 
   return (
     <div className="mx-auto max-w-lg space-y-6">
@@ -114,6 +125,23 @@ export default async function CheckoutPage({
               </div>
               <p className="font-semibold">This payment is already complete</p>
               <Button asChild variant="brand" className="w-full">
+                <Link href="/student/payments">Back to payments</Link>
+              </Button>
+            </div>
+          ) : checkoutError ? (
+            <div className="space-y-3">
+              <div className="flex items-start gap-2.5 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+                <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                <span>
+                  We couldn&apos;t open the Paynow checkout: {checkoutError}
+                </span>
+              </div>
+              <Button asChild variant="brand" className="w-full">
+                <Link href={`/student/payments/checkout?ref=${payment.reference}`}>
+                  Try again
+                </Link>
+              </Button>
+              <Button asChild variant="outline" className="w-full">
                 <Link href="/student/payments">Back to payments</Link>
               </Button>
             </div>
