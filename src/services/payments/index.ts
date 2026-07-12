@@ -142,7 +142,10 @@ export async function startMobilePayment(opts: {
           provider: "paynow",
           pollUrl: result.pollUrl,
           providerRef: result.providerRef,
-          rawStatus: result.status ?? (result.ok ? "sent" : "error"),
+          // Store the real Paynow error on failure so it can be diagnosed.
+          rawStatus: result.ok
+            ? result.status ?? "sent"
+            : result.error ?? "error",
         },
       },
     },
@@ -157,6 +160,7 @@ export async function startMobilePayment(opts: {
       method: opts.method,
       mode: result.mode,
       ok: result.ok,
+      error: result.error ?? null,
     },
   });
 

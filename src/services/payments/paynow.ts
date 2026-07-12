@@ -66,12 +66,20 @@ function toUrlEncoded(data: Record<string, string>): string {
 
 function parsePaynowResponse(text: string): Record<string, string> {
   const out: Record<string, string> = {};
-  for (const line of text.split("\n")) {
-    const idx = line.indexOf("=");
-    if (idx > -1) {
-      out[line.slice(0, idx).trim().toLowerCase()] = decodeURIComponent(
-        line.slice(idx + 1).trim(),
-      );
+  // Paynow returns URL-encoded key=value pairs separated by "&" (its API
+  // format); some endpoints use newlines. Split on both so parsing is robust —
+  // otherwise a whole response collapses into the first key and every call
+  // looks "declined".
+  for (const pair of text.split(/[&\r\n]+/)) {
+    const idx = pair.indexOf("=");
+    if (idx < 0) continue;
+    const key = pair.slice(0, idx).trim().toLowerCase();
+    if (!key) continue;
+    const raw = pair.slice(idx + 1).trim().replace(/\+/g, " ");
+    try {
+      out[key] = decodeURIComponent(raw);
+    } catch {
+      out[key] = raw;
     }
   }
   return out;
