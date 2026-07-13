@@ -468,7 +468,7 @@ export async function verifyAndSettle(
     await settlePayment(reference);
     return { status: "paid", providerStatus: v.status };
   }
-  if (/cancel|fail|disputed|refunded/i.test(v.status)) {
+  if (/cancel|fail|disputed|refunded|reversed/i.test(v.status)) {
     await failPayment(reference, v.status);
     return { status: "failed", providerStatus: v.status };
   }
