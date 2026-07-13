@@ -288,6 +288,7 @@ export async function requestInfo(formData: FormData): Promise<ActionResult> {
       entityType: "Application",
       entityId: id,
     });
+    revalidatePath("/owner/applications");
     revalidatePath(`/owner/applications/${id}`);
     return { success: true };
   } catch (e) {
@@ -355,6 +356,7 @@ export async function createStudentInvoice(
       metadata: { amount, generateLink },
     });
     revalidatePath(`/owner/students/${studentProfileId}`);
+    revalidatePath("/owner/students");
     revalidatePath("/owner/invoices");
     return { success: true };
   } catch (e) {
@@ -383,6 +385,8 @@ export async function moveStudentRoom(
       metadata: { roomId },
     });
     revalidatePath(`/owner/students/${studentProfileId}`);
+    revalidatePath("/owner/students");
+    revalidatePath("/owner/rooms");
     return { success: true };
   } catch (e) {
     return { success: false, error: (e as Error).message };
@@ -500,6 +504,8 @@ export async function markPaymentPaid(
     await settlePayment(reference);
     revalidatePath("/owner/payments");
     revalidatePath("/owner/invoices");
+    revalidatePath("/owner/students");
+    revalidatePath("/owner");
     return { success: true };
   } catch (e) {
     return { success: false, error: (e as Error).message };
@@ -516,6 +522,7 @@ export async function generateInvoiceLink(
     await generatePaymentLink(invoiceId);
     revalidatePath("/owner/invoices");
     revalidatePath("/owner/payments");
+    revalidatePath("/owner/students");
     return { success: true };
   } catch (e) {
     return { success: false, error: (e as Error).message };
