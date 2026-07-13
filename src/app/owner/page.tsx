@@ -192,7 +192,7 @@ export default async function OwnerOverviewPage() {
         <Card>
           <CardHeader className="flex-row items-center justify-between space-y-0">
             <CardTitle>Recent payments</CardTitle>
-            <Button asChild variant="ghost" size="sm">
+            <Button asChild variant="outline" size="sm">
               <Link href="/owner/payments">
                 View all <ArrowRight className="size-4" />
               </Link>
@@ -231,7 +231,7 @@ export default async function OwnerOverviewPage() {
         <Card>
           <CardHeader className="flex-row items-center justify-between space-y-0">
             <CardTitle>Recent applications</CardTitle>
-            <Button asChild variant="ghost" size="sm">
+            <Button asChild variant="outline" size="sm">
               <Link href="/owner/applications">
                 View all <ArrowRight className="size-4" />
               </Link>
@@ -257,7 +257,7 @@ export default async function OwnerOverviewPage() {
                         <StatusBadge meta={APPLICATION_STATUS_META[a.status]} />
                       </TableCell>
                       <TableCell>
-                        <Button asChild variant="ghost" size="sm">
+                        <Button asChild variant="outline" size="sm">
                           <Link href={`/owner/applications/${a.id}`}>Open</Link>
                         </Button>
                       </TableCell>

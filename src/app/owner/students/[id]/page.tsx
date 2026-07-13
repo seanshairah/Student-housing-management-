@@ -87,7 +87,7 @@ export default async function StudentDetailPage({
       <div className="grid gap-6 lg:grid-cols-3 [&>*]:min-w-0">
         <div className="space-y-6 lg:col-span-2">
           {/* Balance summary */}
-          <div className="grid grid-cols-3 gap-3 sm:gap-4 [&>*]:min-w-0">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4 [&>*]:min-w-0">
             <Card className="p-4">
               <p className="text-xs text-muted-foreground">Total invoiced</p>
               <p className="mt-1 font-display text-xl font-bold">{formatCurrency(due)}</p>
@@ -163,7 +163,7 @@ export default async function StudentDetailPage({
                           <StatusBadge meta={INVOICE_STATUS_META[i.status]} />
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button asChild variant="ghost" size="sm">
+                          <Button asChild variant="outline" size="sm">
                             <a href={`/api/documents/invoice/${i.id}`} target="_blank" rel="noreferrer">View</a>
                           </Button>
                         </TableCell>
@@ -207,7 +207,7 @@ export default async function StudentDetailPage({
                         <TableCell className="text-muted-foreground">{formatDate(p.createdAt)}</TableCell>
                         <TableCell className="text-right">
                           {p.receipt && (
-                            <Button asChild variant="ghost" size="sm">
+                            <Button asChild variant="outline" size="sm">
                               <a href={`/api/documents/receipt/${p.receipt.id}`} target="_blank" rel="noreferrer">
                                 <Receipt className="size-4" /> Receipt
                               </a>

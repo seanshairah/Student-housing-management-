@@ -83,7 +83,7 @@ export function HouseCard({ house }: { house: HouseCardData }) {
         </Link>
         <Link
           href={`/book?house=${house.slug}`}
-          className="text-muted-foreground transition-colors hover:text-foreground"
+          className="inline-flex items-center rounded-full border border-border px-3.5 py-1 font-medium text-foreground transition-colors hover:bg-accent"
         >
           Book
         </Link>

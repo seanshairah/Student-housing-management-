@@ -117,7 +117,7 @@ export default async function StudentPaymentsPage() {
             title="Pay next month's rent"
             triggerLabel="Next month's rent"
             triggerIcon={<CalendarClock className="size-4" />}
-            triggerClassName="h-auto w-full flex-col items-start gap-1 py-3 text-left"
+            triggerClassName="h-auto w-full flex-col items-start gap-1 whitespace-normal py-3 text-left"
             amount={roomPrice}
             defaultPhone={profile.phone}
           />
@@ -126,7 +126,7 @@ export default async function StudentPaymentsPage() {
             title="Pay next semester's rent"
             triggerLabel="Next semester's rent"
             triggerIcon={<CalendarRange className="size-4" />}
-            triggerClassName="h-auto w-full flex-col items-start gap-1 py-3 text-left"
+            triggerClassName="h-auto w-full flex-col items-start gap-1 whitespace-normal py-3 text-left"
             amount={roomPrice * 6}
             defaultPhone={profile.phone}
           />
@@ -135,7 +135,7 @@ export default async function StudentPaymentsPage() {
             title="Pay transport service"
             triggerLabel="Transport service"
             triggerIcon={<Bus className="size-4" />}
-            triggerClassName="h-auto w-full flex-col items-start gap-1 py-3 text-left"
+            triggerClassName="h-auto w-full flex-col items-start gap-1 whitespace-normal py-3 text-left"
             defaultPhone={profile.phone}
           />
         </CardContent>
@@ -237,7 +237,7 @@ export default async function StudentPaymentsPage() {
                       <StatusBadge meta={INVOICE_STATUS_META[inv.status]} />
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button asChild variant="ghost" size="sm">
+                      <Button asChild variant="outline" size="sm">
                         <a
                           href={`/api/documents/invoice/${inv.id}`}
                           target="_blank"
@@ -295,7 +295,7 @@ export default async function StudentPaymentsPage() {
                       {p.status === PaymentStatus.PENDING ? (
                         <PayButton reference={p.reference} />
                       ) : p.status === PaymentStatus.PAID && p.receipt ? (
-                        <Button asChild variant="ghost" size="sm">
+                        <Button asChild variant="outline" size="sm">
                           <a
                             href={`/api/documents/receipt/${p.receipt.id}`}
                             target="_blank"

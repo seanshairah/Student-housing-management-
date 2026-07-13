@@ -32,7 +32,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#157857",
+  themeColor: "#171716",
   width: "device-width",
   initialScale: 1,
   // Let content extend under the notch / home indicator so the bottom tab bar

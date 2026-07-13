@@ -32,12 +32,12 @@ export function RevenueAreaChart({
             <stop offset="95%" stopColor={BRAND} stopOpacity={0} />
           </linearGradient>
         </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="#eef0ef" vertical={false} />
-        <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={12} stroke="#8a978f" />
-        <YAxis tickLine={false} axisLine={false} fontSize={12} stroke="#8a978f" width={48} />
+        <CartesianGrid strokeDasharray="3 3" stroke="#ececeb" vertical={false} />
+        <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={12} stroke="#8f8f89" />
+        <YAxis tickLine={false} axisLine={false} fontSize={12} stroke="#8f8f89" width={48} />
         <Tooltip
           formatter={(v: number) => [`$${v.toLocaleString()}`, "Revenue"]}
-          contentStyle={{ borderRadius: 12, border: "1px solid #eef0ef", fontSize: 13 }}
+          contentStyle={{ borderRadius: 12, border: "1px solid #ececeb", fontSize: 13 }}
         />
         <Area
           type="monotone"
@@ -59,10 +59,10 @@ export function OccupancyBarChart({
   return (
     <ResponsiveContainer width="100%" height={260}>
       <BarChart data={data} margin={{ top: 10, right: 8, left: -12, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#eef0ef" vertical={false} />
-        <XAxis dataKey="house" tickLine={false} axisLine={false} fontSize={12} stroke="#8a978f" />
-        <YAxis tickLine={false} axisLine={false} fontSize={12} stroke="#8a978f" width={32} />
-        <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid #eef0ef", fontSize: 13 }} />
+        <CartesianGrid strokeDasharray="3 3" stroke="#ececeb" vertical={false} />
+        <XAxis dataKey="house" tickLine={false} axisLine={false} fontSize={12} stroke="#8f8f89" />
+        <YAxis tickLine={false} axisLine={false} fontSize={12} stroke="#8f8f89" width={32} />
+        <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid #ececeb", fontSize: 13 }} />
         <Bar dataKey="occupied" stackId="a" fill={BRAND} radius={[0, 0, 0, 0]} name="Occupied" />
         <Bar dataKey="available" stackId="a" fill="#d9d9d6" radius={[6, 6, 0, 0]} name="Available" />
       </BarChart>
@@ -92,7 +92,7 @@ export function StatusPieChart({
             <Cell key={i} fill={PALETTE[i % PALETTE.length]} />
           ))}
         </Pie>
-        <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid #eef0ef", fontSize: 13 }} />
+        <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid #ececeb", fontSize: 13 }} />
       </PieChart>
     </ResponsiveContainer>
   );
