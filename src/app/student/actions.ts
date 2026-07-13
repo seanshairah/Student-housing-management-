@@ -25,6 +25,24 @@ async function getProfile(userId: string) {
   return prisma.studentProfile.findUnique({ where: { userId } });
 }
 
+/**
+ * Ensure the payment identified by `reference` belongs to the signed-in
+ * student. Every payment is bound to a studentProfileId at creation, so this
+ * guarantees a student can only ever poll/settle their OWN payment — a
+ * reference for another student's payment is rejected before it reaches Paynow
+ * or the settlement logic.
+ */
+async function ownsPayment(userId: string, reference: string) {
+  if (!reference) return false;
+  const profile = await getProfile(userId);
+  if (!profile) return false;
+  const payment = await prisma.payment.findUnique({
+    where: { reference },
+    select: { studentProfileId: true },
+  });
+  return Boolean(payment) && payment!.studentProfileId === profile.id;
+}
+
 /** Request to renew / extend the stay for the coming term. */
 export async function requestRenewalAction(
   formData: FormData,
@@ -159,7 +177,10 @@ export async function initiateMobilePaymentAction(input: {
 export async function checkMobilePaymentAction(
   reference: string,
 ): Promise<{ status: "paid" | "pending" | "failed"; error?: string }> {
-  await requireRole("STUDENT");
+  const session = await requireRole("STUDENT");
+  if (!(await ownsPayment(session.userId, reference))) {
+    return { status: "failed", error: "Payment not found." };
+  }
   const r = await verifyAndSettle(reference);
   if (r.status === "paid") {
     revalidatePath("/student/payments");
@@ -178,8 +199,11 @@ export async function checkMobilePaymentAction(
  * actually confirms, so this button can't be used to settle for free.
  */
 export async function payNowAction(reference: string): Promise<ActionResult> {
-  await requireRole("STUDENT");
+  const session = await requireRole("STUDENT");
   if (!reference) return { success: false, error: "Missing payment reference" };
+  if (!(await ownsPayment(session.userId, reference))) {
+    return { success: false, error: "Payment not found." };
+  }
   try {
     const r = await verifyAndSettle(reference);
     revalidatePath("/student/payments");
@@ -202,8 +226,11 @@ export async function payNowAction(reference: string): Promise<ActionResult> {
 export async function confirmPaymentReturn(
   reference: string,
 ): Promise<ActionResult> {
-  await requireRole("STUDENT");
+  const session = await requireRole("STUDENT");
   if (!reference) return { success: false, error: "Missing payment reference" };
+  if (!(await ownsPayment(session.userId, reference))) {
+    return { success: false, error: "Payment not found." };
+  }
   try {
     await verifyAndSettle(reference);
     revalidatePath("/student/payments");

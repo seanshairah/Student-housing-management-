@@ -255,6 +255,21 @@ export interface VerifyResult {
   raw?: Record<string, string>;
 }
 
+/**
+ * Paynow statuses that mean the money has actually been received by the
+ * merchant. "Paid" is the immediate confirmation; "Awaiting Delivery" and
+ * "Delivered" are later fulfilment states that still imply the funds cleared.
+ * We deliberately do NOT include initiated ("Created"/"Sent") or any
+ * negative/reversal state, so a payment is only ever marked paid when Paynow
+ * has genuinely confirmed the funds.
+ */
+const PAID_STATUSES = new Set(["paid", "awaiting delivery", "delivered"]);
+
+/** True when Paynow reports a status that means the funds were received. */
+export function isPaynowPaidStatus(status: string | undefined | null): boolean {
+  return PAID_STATUSES.has((status || "").trim().toLowerCase());
+}
+
 /** Poll Paynow (or simulate) to verify payment status. */
 export async function verifyPaynowPayment(
   pollUrl: string,
@@ -267,7 +282,7 @@ export async function verifyPaynowPayment(
     const res = await fetch(pollUrl);
     const parsed = parsePaynowResponse(await res.text());
     return {
-      paid: parsed.status?.toLowerCase() === "paid",
+      paid: isPaynowPaidStatus(parsed.status),
       status: parsed.status || "Unknown",
       raw: parsed,
     };
@@ -282,7 +297,7 @@ export function parsePaynowResult(
 ): { reference: string; paid: boolean; status: string } {
   return {
     reference: body.reference || "",
-    paid: (body.status || "").toLowerCase() === "paid",
+    paid: isPaynowPaidStatus(body.status),
     status: body.status || "Unknown",
   };
 }
