@@ -352,6 +352,9 @@ async function ensureStudentProfile(
       guardianName: app.guardianName,
       guardianPhone: app.guardianPhone,
       status: StudentStatus.APPLICANT,
+      // The application form already captured their details + next-of-kin, so
+      // they skip the onboarding wizard (they still set a new password first).
+      onboardingCompletedAt: new Date(),
     },
   });
 

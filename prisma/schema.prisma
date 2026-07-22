@@ -143,6 +143,10 @@ model User {
   phone         String?
   role          UserRole  @default(STUDENT)
   isActive      Boolean   @default(true)
+  // When true, the user is forced to set a new password on their next sign-in.
+  // Set for auto-provisioned accounts (bulk intake, application approval) that
+  // are issued a temporary password.
+  mustChangePassword Boolean @default(false)
   lastLoginAt   DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -235,6 +239,13 @@ model StudentProfile {
 
   notes           String?       @db.Text
   documents       String[]
+
+  // Onboarding: set when the student completes the guided onboarding form
+  // (personal details + next-of-kin). Until then they are routed to /onboarding.
+  onboardingCompletedAt DateTime?
+  // When login credentials were last sent to this student (email/SMS). Lets the
+  // owner see who has been notified and avoid accidental double-sends.
+  credentialsSentAt     DateTime?
 
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt

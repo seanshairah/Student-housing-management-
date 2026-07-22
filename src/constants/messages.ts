@@ -5,6 +5,8 @@ export const SMS_TEMPLATES = {
     "Hi {{studentName}}, your accommodation application for {{houseName}} has been received and is awaiting review. We'll notify you by email and SMS once it's been reviewed. No action needed for now.",
   applicationApproved:
     "Hi {{studentName}}, your application for {{houseName}} is APPROVED. Sign in to your student portal at {{loginUrl}} with email {{email}} and password {{password}} to pay your rent and activate your account.",
+  credentialsIssued:
+    "Hi {{studentName}}, welcome to BlessBri Properties. Your student portal is ready. Sign in at {{loginUrl}} with email {{email}} and temporary password {{password}}. You'll be asked to set your own password and complete your onboarding.",
   applicationRejected:
     "Hi {{studentName}}, thank you for applying to {{houseName}}. Unfortunately we are unable to offer you a room at this time. Please contact us for other options.",
   paymentLinkGenerated:
@@ -25,6 +27,7 @@ export const EMAIL_SUBJECTS = {
   applicationReceived: "We've received your accommodation application",
   newApplicationAlert: "New accommodation application received",
   applicationApproved: "Your accommodation application is approved 🎉",
+  credentialsIssued: "Welcome to BlessBri Properties — your portal login",
   applicationRejected: "Update on your accommodation application",
   paymentRequest: "Your payment request is ready",
   paymentConfirmation: "Payment received — thank you",
