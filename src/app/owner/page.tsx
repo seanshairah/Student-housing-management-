@@ -117,10 +117,21 @@ export default async function OwnerOverviewPage() {
         <StatCard label="Available rooms" value={stats.availableRooms} icon="DoorOpen" accent="emerald" hint={`${stats.totalRooms} total`} />
         <StatCard label="Occupied rooms" value={stats.occupiedRooms} icon="BedDouble" accent="blue" />
         <StatCard label="Pending applications" value={stats.pendingApplications} icon="FileText" accent="amber" />
-        <StatCard label="Monthly revenue" value={formatCurrency(stats.monthlyRevenue)} icon="TrendingUp" accent="brand" />
+        <StatCard
+          label="Expected monthly"
+          value={formatCurrency(stats.expectedMonthlyRevenue)}
+          icon="TrendingUp"
+          accent="brand"
+          hint={`${formatCurrency(stats.expectedRent)} rent · ${formatCurrency(stats.expectedTransport)} transport`}
+        />
+        <StatCard
+          label="Collected this month"
+          value={formatCurrency(stats.monthlyRevenue)}
+          icon="DollarSign"
+          accent="emerald"
+        />
         <StatCard label="Outstanding balances" value={formatCurrency(stats.outstanding)} icon="AlertTriangle" accent="rose" />
         <StatCard label="Occupancy rate" value={`${stats.occupancyRate}%`} icon="PieChart" accent="slate" />
-        <StatCard label="Total revenue" value={formatCurrency(stats.totalRevenue)} icon="DollarSign" accent="emerald" />
       </div>
 
       {/* Alerts */}

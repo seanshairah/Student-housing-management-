@@ -27,6 +27,7 @@ export interface OnboardingDefaults {
   nextOfKinRelation?: string | null;
   guardianName?: string | null;
   guardianPhone?: string | null;
+  transportOptIn?: boolean | null;
 }
 
 export function OnboardingForm({ defaults }: { defaults: OnboardingDefaults }) {
@@ -136,6 +137,17 @@ export function OnboardingForm({ defaults }: { defaults: OnboardingDefaults }) {
             </Select>
           </div>
         </div>
+        <label className="flex items-center gap-2.5 rounded-xl border border-border p-3 text-sm">
+          <input
+            type="checkbox"
+            name="transportOptIn"
+            defaultChecked={Boolean(defaults.transportOptIn)}
+            className="size-4 rounded border-border"
+          />
+          <span>
+            Add the <strong>transport service</strong> — $15/month
+          </span>
+        </label>
       </section>
 
       <section className="space-y-4">

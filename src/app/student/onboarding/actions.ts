@@ -117,6 +117,7 @@ export async function completeOnboardingAction(
           nextOfKinRelation: str("nextOfKinRelation") || null,
           guardianName: str("guardianName") || null,
           guardianPhone: str("guardianPhone") || null,
+          transportOptIn: formData.get("transportOptIn") === "on",
           onboardingCompletedAt: new Date(),
         },
       });
