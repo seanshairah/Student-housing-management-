@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { toNumber } from "@/lib/utils";
+import { TRANSPORT_MONTHLY_FEE } from "@/constants/rent";
 
 /** High-level KPIs for the owner overview. */
 export async function getOverviewStats() {
@@ -10,6 +11,8 @@ export async function getOverviewStats() {
     pendingApplications,
     paidPayments,
     invoices,
+    activeWithRoom,
+    transportCount,
   ] = await Promise.all([
     prisma.studentProfile.count({ where: { status: { notIn: ["ARCHIVED"] } } }),
     prisma.studentProfile.count({ where: { status: "ACTIVE" } }),
@@ -19,6 +22,15 @@ export async function getOverviewStats() {
     }),
     prisma.payment.findMany({ where: { status: "PAID" } }),
     prisma.invoice.findMany({ where: { status: { not: "CANCELLED" } } }),
+    // Expected recurring revenue: each active student's assigned-room rent...
+    prisma.studentProfile.findMany({
+      where: { status: "ACTIVE", roomId: { not: null } },
+      select: { room: { select: { price: true } } },
+    }),
+    // ...plus the monthly transport subscriptions.
+    prisma.studentProfile.count({
+      where: { status: "ACTIVE", transportOptIn: true },
+    }),
   ]);
 
   const totalRooms = rooms.length;
@@ -39,6 +51,15 @@ export async function getOverviewStats() {
   const totalPaid = invoices.reduce((s, i) => s + toNumber(i.amountPaid), 0);
   const outstanding = totalInvoiced - totalPaid;
 
+  // Expected monthly revenue = rent from assigned rooms + transport subscriptions.
+  // Populates as students complete onboarding (which assigns their room + tier).
+  const expectedRent = activeWithRoom.reduce(
+    (s, st) => s + toNumber(st.room?.price),
+    0,
+  );
+  const expectedTransport = transportCount * TRANSPORT_MONTHLY_FEE;
+  const expectedMonthlyRevenue = expectedRent + expectedTransport;
+
   return {
     totalStudents,
     activeStudents,
@@ -50,6 +71,10 @@ export async function getOverviewStats() {
     monthlyRevenue,
     totalRevenue,
     outstanding,
+    expectedRent,
+    expectedTransport,
+    expectedMonthlyRevenue,
+    transportSubscribers: transportCount,
   };
 }
 

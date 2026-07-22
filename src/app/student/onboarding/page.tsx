@@ -48,6 +48,7 @@ export default async function OnboardingPage() {
               nextOfKinRelation: profile.nextOfKinRelation,
               guardianName: profile.guardianName,
               guardianPhone: profile.guardianPhone,
+              transportOptIn: profile.transportOptIn,
             }}
           />
         </CardContent>

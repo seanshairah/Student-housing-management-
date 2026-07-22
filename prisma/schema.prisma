@@ -246,6 +246,9 @@ model StudentProfile {
   // When login credentials were last sent to this student (email/SMS). Lets the
   // owner see who has been notified and avoid accidental double-sends.
   credentialsSentAt     DateTime?
+  // Whether the student subscribes to the monthly transport service. Feeds the
+  // owner's expected-revenue projection.
+  transportOptIn        Boolean       @default(false)
 
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
