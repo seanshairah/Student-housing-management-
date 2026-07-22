@@ -9,10 +9,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { RENT_TIERS } from "@/constants/rent";
 import type { ActionResult } from "@/types";
 
 export interface OnboardingDefaults {
   phone?: string | null;
+  roomNumber?: string | null;
+  roomTier?: string | null;
   nationalId?: string | null;
   age?: number | null;
   gender?: string | null;
@@ -93,6 +96,44 @@ export function OnboardingForm({ defaults }: { defaults: OnboardingDefaults }) {
           <div className="space-y-1.5">
             <Label htmlFor="yearOfStudy">Year of study</Label>
             <Input id="yearOfStudy" name="yearOfStudy" placeholder="e.g. 2" defaultValue={v(defaults.yearOfStudy)} />
+          </div>
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <h2 className="font-display text-lg font-semibold">Your room</h2>
+        <p className="-mt-2 text-sm text-muted-foreground">
+          Enter the room you&apos;ve been given and whether it&apos;s single or
+          sharing. The owner will confirm it.
+        </p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="roomNumber">Room number / name *</Label>
+            <Input
+              id="roomNumber"
+              name="roomNumber"
+              placeholder="e.g. 5 or Room B"
+              defaultValue={v(defaults.roomNumber)}
+              required
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="roomTier">Room type *</Label>
+            <Select
+              id="roomTier"
+              name="roomTier"
+              defaultValue={v(defaults.roomTier)}
+              required
+            >
+              <option value="" disabled>
+                Select room type
+              </option>
+              {RENT_TIERS.map((t) => (
+                <option key={t.key} value={t.key}>
+                  {t.label}
+                </option>
+              ))}
+            </Select>
           </div>
         </div>
       </section>

@@ -186,9 +186,11 @@ export async function importMufudziIntake(
       deposit: s.deposit,
     }));
 
+    const sendNow = String(formData.get("sendNow") || "") === "on";
     const result = await bulkCreateStudents(rows, {
       houseId: house.id,
       status: StudentStatus.ACTIVE,
+      sendCredentials: sendNow,
     });
 
     revalidatePath("/owner/students");
@@ -196,7 +198,7 @@ export async function importMufudziIntake(
     revalidatePath("/owner/intake");
     return {
       success: true,
-      message: `Imported ${result.created.length} students into Mufudzi House${result.skipped.length ? `, skipped ${result.skipped.length}` : ""}. Credentials NOT sent yet.`,
+      message: `Imported ${result.created.length} students into Mufudzi House${result.skipped.length ? `, skipped ${result.skipped.length}` : ""}. ${sendNow ? "Credentials sent." : "Credentials NOT sent yet — use step 3."}`,
       data: { created: result.created.length, skipped: result.skipped },
     };
   } catch (e) {

@@ -224,7 +224,7 @@ export interface BulkImportResult {
  */
 export async function bulkCreateStudents(
   rows: BulkStudentRow[],
-  opts?: { houseId?: string | null; status?: StudentStatus },
+  opts?: { houseId?: string | null; status?: StudentStatus; sendCredentials?: boolean },
 ): Promise<BulkImportResult> {
   const created: CreatedStudent[] = [];
   const skipped: { row: BulkStudentRow; reason: string }[] = [];
@@ -258,6 +258,12 @@ export async function bulkCreateStudents(
         { maxWait: 10000, timeout: 20000 },
       );
       created.push(result);
+      // Send login credentials immediately after the portal is created
+      // (best-effort — outside the transaction so a send failure can't roll
+      // back the account).
+      if (opts?.sendCredentials) {
+        await sendStudentCredentials(result.studentProfileId).catch(() => undefined);
+      }
     } catch (e) {
       skipped.push({ row, reason: (e as Error).message });
     }

@@ -128,8 +128,12 @@ export function IntakeConsole({
               className="mt-3 max-w-xs"
             />
           </div>
-          <form action={(fd) => run(() => importMufudziIntake(fd))}>
+          <form action={(fd) => run(() => importMufudziIntake(fd))} className="space-y-3">
             <input type="hidden" name="confirm" value={resetConfirm} />
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              <input type="checkbox" name="sendNow" className="size-4 rounded border-border" />
+              Email + text each student their login immediately after import
+            </label>
             <Button type="submit" variant="brand" disabled={pending || !mufudziExists}>
               <Upload className="size-4" />
               {resetConfirm.trim() === "RESET"

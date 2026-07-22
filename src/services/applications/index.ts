@@ -318,12 +318,7 @@ async function ensureStudentProfile(
   const user = existingUser
     ? await tx.user.update({
         where: { id: existingUser.id },
-        data: {
-          passwordHash,
-          role: UserRole.STUDENT,
-          isActive: true,
-          mustChangePassword: true,
-        },
+        data: { passwordHash, role: UserRole.STUDENT, isActive: true },
       })
     : await tx.user.create({
         data: {
@@ -332,7 +327,6 @@ async function ensureStudentProfile(
           phone: app.phone,
           role: UserRole.STUDENT,
           passwordHash,
-          mustChangePassword: true,
         },
       });
 
