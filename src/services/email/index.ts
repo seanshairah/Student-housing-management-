@@ -22,7 +22,8 @@ export interface EmailResult {
 }
 
 const EMAIL_FROM =
-  process.env.EMAIL_FROM || "Student Housing <no-reply@studenthousing.local>";
+  process.env.EMAIL_FROM ||
+  "Blessbri Properties <notifications@blessbriproperties.co.zw>";
 
 function resendConfigured(): boolean {
   return Boolean(process.env.RESEND_API_KEY);
