@@ -73,6 +73,14 @@ export async function submitApplicationAction(
           "Sorry, that room has just been taken. Please go back and choose another available room.",
       };
     }
+    // Already an enrolled student — point them at sign-in instead of re-applying.
+    if (/already-registered/i.test(message)) {
+      return {
+        success: false,
+        error:
+          "You already have a student account. Please sign in and complete your onboarding instead of applying again.",
+      };
+    }
     return {
       success: false,
       error:

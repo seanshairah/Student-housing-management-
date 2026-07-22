@@ -49,6 +49,19 @@ export interface SubmitApplicationInput {
 export async function submitApplication(input: SubmitApplicationInput) {
   const reference = generateReference("APP");
 
+  // Guard: someone who already has a student account shouldn't file a fresh
+  // application (this caused duplicate/stray applications from onboarded
+  // students). Send them to sign in and complete onboarding instead.
+  const existing = await prisma.user.findUnique({
+    where: { email: input.email.toLowerCase().trim() },
+    select: { role: true },
+  });
+  if (existing?.role === "STUDENT") {
+    throw new Error(
+      "already-registered: You already have a student account. Please sign in and complete your onboarding instead of applying again.",
+    );
+  }
+
   const application = await prisma.$transaction(
     async (tx: Prisma.TransactionClient) => {
       // Validate & lock the room if one was chosen.

@@ -20,7 +20,10 @@ export async function getOverviewStats() {
     prisma.application.count({
       where: { status: { in: ["NEW", "AWAITING_REVIEW"] } },
     }),
-    prisma.payment.findMany({ where: { status: "PAID" } }),
+    prisma.payment.findMany({
+      where: { status: "PAID" },
+      include: { invoice: { select: { description: true } } },
+    }),
     prisma.invoice.findMany({ where: { status: { not: "CANCELLED" } } }),
     // Expected recurring revenue: each active student's assigned-room rent...
     prisma.studentProfile.findMany({
@@ -34,18 +37,34 @@ export async function getOverviewStats() {
   ]);
 
   const totalRooms = rooms.length;
-  const availableRooms = rooms.filter((r) => r.status === "AVAILABLE").length;
-  const occupiedRooms = rooms.filter((r) => r.status === "OCCUPIED").length;
+  // Count by actual bed space, not just the status enum: a 1-of-2 shared room
+  // is neither fully "AVAILABLE" nor "OCCUPIED", so status-based counts read as
+  // 0/0 and mislead. "Available" = has a free bed; "full" = at capacity.
+  const availableRooms = rooms.filter((r) => r.occupied < r.capacity).length;
+  const occupiedRooms = rooms.filter(
+    (r) => r.capacity > 0 && r.occupied >= r.capacity,
+  ).length;
   const capacity = rooms.reduce((s, r) => s + r.capacity, 0);
   const occupied = rooms.reduce((s, r) => s + r.occupied, 0);
   const occupancyRate = capacity ? Math.round((occupied / capacity) * 100) : 0;
 
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const monthlyRevenue = paidPayments
+
+  // A booking deposit is not rent/service revenue — it's a one-time payment
+  // held against the student. Keep it out of the "revenue" figures so those
+  // reflect actual rent + transport income, and report deposits separately.
+  const isDeposit = (p: (typeof paidPayments)[number]) =>
+    /deposit/i.test(p.invoice?.description ?? "");
+  const revenuePayments = paidPayments.filter((p) => !isDeposit(p));
+
+  const monthlyRevenue = revenuePayments
     .filter((p) => p.paidAt && p.paidAt >= monthStart)
     .reduce((s, p) => s + toNumber(p.amount), 0);
-  const totalRevenue = paidPayments.reduce((s, p) => s + toNumber(p.amount), 0);
+  const totalRevenue = revenuePayments.reduce((s, p) => s + toNumber(p.amount), 0);
+  const depositsCollected = paidPayments
+    .filter(isDeposit)
+    .reduce((s, p) => s + toNumber(p.amount), 0);
 
   const totalInvoiced = invoices.reduce((s, i) => s + toNumber(i.amount), 0);
   const totalPaid = invoices.reduce((s, i) => s + toNumber(i.amountPaid), 0);
@@ -71,6 +90,7 @@ export async function getOverviewStats() {
     monthlyRevenue,
     totalRevenue,
     outstanding,
+    depositsCollected,
     expectedRent,
     expectedTransport,
     expectedMonthlyRevenue,
