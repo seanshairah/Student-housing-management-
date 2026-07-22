@@ -11,6 +11,8 @@ export interface SessionPayload {
   email: string;
   name: string;
   role: UserRole;
+  /** When true the user must set a new password before using the app. */
+  mustChangePassword?: boolean;
   [key: string]: unknown;
 }
 

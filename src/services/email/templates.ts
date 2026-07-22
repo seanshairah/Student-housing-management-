@@ -126,6 +126,26 @@ export const emailTemplates = {
       ctaUrl: String(d.loginUrl || "#"),
     }),
 
+  // Sent to a bulk-provisioned / newly-created student with their login
+  // credentials. Decoupled from the rent-payment flow: it asks them to sign
+  // in, change the temporary password, and complete onboarding.
+  credentialsIssued: (d: TemplateData) =>
+    brandedEmail({
+      heading: "Welcome to BlessBri Properties 👋",
+      intro: `Hi ${d.studentName}, your student portal account has been created. Sign in with the details below to complete your onboarding.`,
+      bodyHtml: `When you first sign in you'll be asked to <strong>set your own password</strong> and then <strong>complete your onboarding</strong> (your personal details and next-of-kin information) so we can finish getting you set up.
+      <div style="margin:18px 0 4px;border:1px solid #e6d9c6;border-radius:12px;padding:16px 18px;background:#faf6f1;">
+        <p style="margin:0 0 12px;font-size:12px;font-weight:700;color:#a87c55;letter-spacing:0.05em;text-transform:uppercase;">Your login credentials</p>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+          <tr><td style="padding:5px 0;color:#8c8c86;font-size:13px;">Email</td><td style="padding:5px 0;text-align:right;font-size:14px;font-weight:600;color:#171716;">${d.email}</td></tr>
+          <tr><td style="padding:5px 0;color:#8c8c86;font-size:13px;">Temporary password</td><td style="padding:5px 0;text-align:right;"><span style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:14px;font-weight:700;color:#171716;background:#ffffff;border:1px solid #e6d9c6;border-radius:6px;padding:3px 9px;">${d.password}</span></td></tr>
+        </table>
+        <p style="margin:12px 0 0;font-size:12px;line-height:1.5;color:#a3a39d;">You'll be prompted to change this temporary password as soon as you sign in.</p>
+      </div>`,
+      ctaLabel: "Sign in to your portal",
+      ctaUrl: String(d.loginUrl || "#"),
+    }),
+
   renewalReceived: (d: TemplateData) =>
     brandedEmail({
       heading: "We've received your renewal request",

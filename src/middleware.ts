@@ -28,6 +28,16 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // Forced password change: a user issued a temporary password must set a new
+  // one before accessing any dashboard route. /change-password itself is not
+  // under the matcher, so this can't loop.
+  if (session.mustChangePassword) {
+    const url = req.nextUrl.clone();
+    url.pathname = "/change-password";
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
+
   // Expose the current path so server layouts can enforce route-level gates.
   const requestHeaders = new Headers(req.headers);
   requestHeaders.set("x-pathname", pathname);

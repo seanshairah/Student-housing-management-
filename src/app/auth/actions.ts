@@ -102,6 +102,7 @@ export async function loginAction(
     email: user.email,
     name: user.name,
     role: user.role,
+    mustChangePassword: user.mustChangePassword,
   });
   await prisma.user.update({
     where: { id: user.id },
@@ -118,7 +119,14 @@ export async function loginAction(
     metadata: { ip },
   });
 
-  return { success: true, data: { redirect: homeForRole(user.role) } };
+  return {
+    success: true,
+    data: {
+      redirect: user.mustChangePassword
+        ? "/change-password"
+        : homeForRole(user.role),
+    },
+  };
 }
 
 export async function logoutAction(): Promise<void> {

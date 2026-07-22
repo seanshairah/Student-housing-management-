@@ -318,7 +318,12 @@ async function ensureStudentProfile(
   const user = existingUser
     ? await tx.user.update({
         where: { id: existingUser.id },
-        data: { passwordHash, role: UserRole.STUDENT, isActive: true },
+        data: {
+          passwordHash,
+          role: UserRole.STUDENT,
+          isActive: true,
+          mustChangePassword: true,
+        },
       })
     : await tx.user.create({
         data: {
@@ -327,6 +332,7 @@ async function ensureStudentProfile(
           phone: app.phone,
           role: UserRole.STUDENT,
           passwordHash,
+          mustChangePassword: true,
         },
       });
 
@@ -352,6 +358,9 @@ async function ensureStudentProfile(
       guardianName: app.guardianName,
       guardianPhone: app.guardianPhone,
       status: StudentStatus.APPLICANT,
+      // The application form already captured their details + next-of-kin, so
+      // they skip the onboarding wizard (they still set a new password first).
+      onboardingCompletedAt: new Date(),
     },
   });
 
