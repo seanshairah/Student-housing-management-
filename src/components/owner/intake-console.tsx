@@ -15,6 +15,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
+  addStudent,
   createAdminAccount,
   importMufudziIntake,
   sendCredentialsBatch,
@@ -26,6 +27,7 @@ interface Props {
   studentCount: number;
   unsentCount: number;
   mufudziExists: boolean;
+  houses: { id: string; name: string }[];
 }
 
 export function IntakeConsole({
@@ -33,6 +35,7 @@ export function IntakeConsole({
   studentCount,
   unsentCount,
   mufudziExists,
+  houses,
 }: Props) {
   const [pending, startTransition] = useTransition();
   const [resetConfirm, setResetConfirm] = useState("");
@@ -53,6 +56,64 @@ export function IntakeConsole({
         <StatBox label="Awaiting credentials" value={unsentCount} icon={<Send className="size-5" />} />
         <StatBox label="Mufudzi intake list" value={intakeCount} icon={<Upload className="size-5" />} />
       </div>
+
+      {/* Add a single student */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <UserPlus className="size-5" /> Add a student
+          </CardTitle>
+          <CardDescription>
+            Creates their portal account exactly like the bulk intake and (by
+            default) emails + texts their login right away. On first sign-in
+            they set a new password and complete the onboarding wizard.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form
+            action={(fd) => run(() => addStudent(fd))}
+            className="grid gap-4 sm:grid-cols-2"
+          >
+            <div className="space-y-1.5">
+              <Label htmlFor="student-name">Full name</Label>
+              <Input id="student-name" name="fullName" placeholder="e.g. Tariro Moyo" required />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="student-email">Email</Label>
+              <Input id="student-email" name="email" type="email" placeholder="student@example.com" required />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="student-phone">Phone (for SMS)</Label>
+              <Input id="student-phone" name="phone" placeholder="07…" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="student-house">House</Label>
+              <Select id="student-house" name="houseId" defaultValue={houses[0]?.id ?? ""}>
+                <option value="">No house yet</option>
+                {houses.map((h) => (
+                  <option key={h.id} value={h.id}>
+                    {h.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <label className="flex items-center gap-2 text-sm text-muted-foreground sm:col-span-2">
+              <input
+                type="checkbox"
+                name="sendNow"
+                defaultChecked
+                className="size-4 rounded border-border"
+              />
+              Email + text their login credentials immediately
+            </label>
+            <div className="sm:col-span-2">
+              <Button type="submit" variant="brand" disabled={pending}>
+                <UserPlus className="size-4" /> Add student
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
 
       {/* 1. Admin account */}
       <Card>
