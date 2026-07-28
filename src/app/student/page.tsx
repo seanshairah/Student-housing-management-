@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/misc";
 import { PayButton } from "@/components/student/pay-button";
+import { CancelPaymentButton } from "@/components/student/cancel-payment-button";
 import { formatCurrency, formatDate, formatDateTime } from "@/lib/utils";
 import { APPLICATION_STATUS_META } from "@/constants";
 import { PaymentStatus } from "@prisma/client";
@@ -122,7 +123,10 @@ export default async function StudentHomePage() {
                 </p>
               </div>
             </div>
-            <PayButton reference={pendingPayment.reference} size="default" />
+            <div className="flex items-center gap-1">
+              <PayButton reference={pendingPayment.reference} size="default" />
+              <CancelPaymentButton reference={pendingPayment.reference} size="default" />
+            </div>
           </CardContent>
         </Card>
       )}
