@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/ui/misc";
 import { PayButton } from "@/components/student/pay-button";
+import { CancelPaymentButton } from "@/components/student/cancel-payment-button";
 import { MobilePaymentDialog } from "@/components/student/mobile-payment-dialog";
 import { formatCurrency, formatDate, toNumber } from "@/lib/utils";
 import { PAYMENT_STATUS_META, INVOICE_STATUS_META } from "@/constants";
@@ -225,7 +226,10 @@ export default async function StudentPaymentsPage() {
                     </p>
                   </div>
                 </div>
-                <PayButton reference={p.reference} size="default" />
+                <span className="inline-flex items-center gap-1">
+                  <PayButton reference={p.reference} size="default" />
+                  <CancelPaymentButton reference={p.reference} />
+                </span>
               </div>
             ))}
           </CardContent>
@@ -343,7 +347,10 @@ export default async function StudentPaymentsPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       {p.status === PaymentStatus.PENDING ? (
-                        <PayButton reference={p.reference} />
+                        <span className="inline-flex items-center gap-1">
+                          <PayButton reference={p.reference} />
+                          <CancelPaymentButton reference={p.reference} />
+                        </span>
                       ) : p.status === PaymentStatus.PAID && p.receipt ? (
                         <Button asChild variant="outline" size="sm">
                           <a
