@@ -72,7 +72,7 @@ export default async function OwnerReportsPage() {
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             <StatCard label="Total revenue" value={formatCurrency(stats.totalRevenue)} icon="DollarSign" accent="emerald" />
-            <StatCard label="This month" value={formatCurrency(stats.monthlyRevenue)} icon="TrendingUp" accent="brand" />
+            <StatCard label="This month" value={formatCurrency(stats.collectedThisMonth)} icon="TrendingUp" accent="brand" />
             <StatCard label="Outstanding" value={formatCurrency(stats.outstanding)} icon="AlertTriangle" accent="rose" />
             <StatCard label="Occupancy" value={`${stats.occupancyRate}%`} icon="PieChart" accent="blue" />
           </div>
@@ -141,9 +141,10 @@ export default async function OwnerReportsPage() {
                 <TableRow>
                   <TableHead>Student</TableHead>
                   <TableHead>House</TableHead>
-                  <TableHead>Invoiced</TableHead>
-                  <TableHead>Paid</TableHead>
+                  <TableHead>Rent</TableHead>
+                  <TableHead>Transport</TableHead>
                   <TableHead>Balance</TableHead>
+                  <TableHead>Arrears</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -151,9 +152,16 @@ export default async function OwnerReportsPage() {
                   <TableRow key={o.id}>
                     <TableCell className="font-medium">{o.name}</TableCell>
                     <TableCell className="text-muted-foreground">{o.house}</TableCell>
-                    <TableCell>{formatCurrency(o.due)}</TableCell>
-                    <TableCell>{formatCurrency(o.paid)}</TableCell>
+                    <TableCell>{formatCurrency(o.rent)}</TableCell>
+                    <TableCell>{formatCurrency(o.transport)}</TableCell>
                     <TableCell className="font-medium text-rose-600">{formatCurrency(o.balance)}</TableCell>
+                    <TableCell>
+                      {o.inArrears ? (
+                        <span className="font-medium text-rose-600">{formatCurrency(o.arrears)}</span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

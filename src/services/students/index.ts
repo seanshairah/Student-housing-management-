@@ -9,7 +9,7 @@ import {
 import { hashPassword } from "@/lib/auth";
 import { generateTempPassword, generateReference, formatCurrency } from "@/lib/utils";
 import { createInvoice, updateInvoiceAfterPayment } from "@/services/invoices";
-import { createReceipt } from "@/services/receipts";
+import { recordManualPayment } from "@/core/billing/deposits";
 import { sendTemplatedEmail } from "@/services/email";
 import { sendStatusSMS } from "@/services/sms";
 import { EMAIL_SUBJECTS } from "@/constants/messages";
@@ -103,30 +103,15 @@ export async function createStudentAccount(
     },
   });
 
-  // Record the paid booking deposit as a paid invoice + payment + receipt so it
-  // reflects in the student's balance and payment history.
+  // Record the paid booking deposit. Shared with the other platform: raises a
+  // DEPOSIT charge, settles it and issues a receipt. This used to leave
+  // Payment.category at its OTHER default, so the owner's "deposits collected"
+  // figure — which sums by category — read zero however much had been taken.
   if (input.deposit && input.deposit > 0) {
-    const invoice = await createInvoice(
-      {
-        studentProfileId: profile.id,
-        description: "Booking deposit",
-        amount: input.deposit,
-      },
+    await recordManualPayment(
+      { studentProfileId: profile.id, amount: input.deposit },
       tx,
     );
-    const payment = await tx.payment.create({
-      data: {
-        reference: generateReference("DEP"),
-        studentProfileId: profile.id,
-        invoiceId: invoice.id,
-        amount: input.deposit,
-        method: PaymentMethod.CASH,
-        status: PaymentStatus.PAID,
-        paidAt: new Date(),
-      },
-    });
-    await createReceipt(payment.id, input.deposit, tx);
-    await updateInvoiceAfterPayment(invoice.id, tx);
   }
 
   return {

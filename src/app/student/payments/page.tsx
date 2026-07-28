@@ -37,6 +37,7 @@ import { PayButton } from "@/components/student/pay-button";
 import { MobilePaymentDialog } from "@/components/student/mobile-payment-dialog";
 import { formatCurrency, formatDate, toNumber } from "@/lib/utils";
 import { PAYMENT_STATUS_META, INVOICE_STATUS_META } from "@/constants";
+import { monthlyRentFor, priceFor } from "@/core/billing/pricing";
 import { PaymentStatus } from "@prisma/client";
 
 export default async function StudentPaymentsPage() {
@@ -73,34 +74,82 @@ export default async function StudentPaymentsPage() {
   ]);
 
   const pending = payments.filter((p) => p.status === PaymentStatus.PENDING);
-  const roomPrice = profile.room ? toNumber(profile.room.price) : 0;
+  // Prices shown here come from the same core pricing the server charges with,
+  // so the button can never advertise a different figure from what is billed.
+  const monthlyRent = monthlyRentFor(
+    profile.room?.type,
+    profile.room ? toNumber(profile.room.price) : null,
+  );
+  const roomPrice = monthlyRent;
+  const semesterRent = priceFor("RENT_SEMESTER", monthlyRent).amount;
+  const transportFee = priceFor("TRANSPORT_MONTH", monthlyRent).amount;
 
   return (
     <div className="space-y-6">
       <PageHeader title="Payments" description="Your invoices, payments & receipts" />
 
       {/* Balance summary */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          label="Total billed"
-          value={formatCurrency(balance.totalDue)}
-          icon="FileText"
-          accent="blue"
+          label="Rent balance"
+          value={formatCurrency(balance.rent.outstanding)}
+          icon="Home"
+          accent={balance.rent.outstanding > 0 ? "amber" : "emerald"}
+          hint={
+            balance.rent.arrears > 0
+              ? `${formatCurrency(balance.rent.arrears)} overdue`
+              : "Up to date"
+          }
+        />
+        <StatCard
+          label="Transport balance"
+          value={formatCurrency(balance.transport.outstanding)}
+          icon="Bus"
+          accent={balance.transport.outstanding > 0 ? "amber" : "emerald"}
+          hint={
+            balance.transport.arrears > 0
+              ? `${formatCurrency(balance.transport.arrears)} overdue`
+              : "Up to date"
+          }
+        />
+        <StatCard
+          label="Total due"
+          value={formatCurrency(balance.balance)}
+          icon="Wallet"
+          accent={balance.inArrears ? "rose" : balance.balance > 0 ? "amber" : "emerald"}
+          hint={
+            balance.balance > 0
+              ? balance.nextDueDate
+                ? `Due ${formatDate(balance.nextDueDate)}`
+                : "Outstanding"
+              : "You're all paid up"
+          }
         />
         <StatCard
           label="Total paid"
           value={formatCurrency(balance.totalPaid)}
           icon="CheckCircle2"
           accent="emerald"
-        />
-        <StatCard
-          label="Balance"
-          value={formatCurrency(balance.balance)}
-          icon="Wallet"
-          accent={balance.balance > 0 ? "rose" : "emerald"}
-          hint={balance.balance > 0 ? "Outstanding" : "Settled"}
+          hint={
+            balance.credit > 0 ? `${formatCurrency(balance.credit)} in credit` : "To date"
+          }
         />
       </div>
+
+      {balance.inArrears ? (
+        <div
+          role="alert"
+          className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-100"
+        >
+          <p className="font-medium">
+            {formatCurrency(balance.arrears)} is past its due date.
+          </p>
+          <p className="mt-1">
+            Please settle this to keep your accommodation in good standing. You
+            can pay rent and transport separately below.
+          </p>
+        </div>
+      ) : null}
 
       {/* Make a payment — EcoCash / OneMoney express checkout */}
       <Card>
@@ -127,7 +176,7 @@ export default async function StudentPaymentsPage() {
             triggerLabel="Next semester's rent"
             triggerIcon={<CalendarRange className="size-4" />}
             triggerClassName="h-auto w-full flex-col items-start gap-1 whitespace-normal py-3 text-left"
-            amount={roomPrice * 6}
+            amount={semesterRent}
             defaultPhone={profile.phone}
           />
           <MobilePaymentDialog
@@ -136,6 +185,7 @@ export default async function StudentPaymentsPage() {
             triggerLabel="Transport service"
             triggerIcon={<Bus className="size-4" />}
             triggerClassName="h-auto w-full flex-col items-start gap-1 whitespace-normal py-3 text-left"
+            amount={transportFee}
             defaultPhone={profile.phone}
           />
         </CardContent>

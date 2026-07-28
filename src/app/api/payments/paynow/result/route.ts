@@ -1,12 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { parsePaynowResult, verifyAndSettle } from "@/services/payments";
+import { parsePaynowResult, pollAndSettle } from "@/services/payments";
 
 /**
  * Paynow server-to-server result webhook.
  *
  * SECURITY: this endpoint is unauthenticated and the POST body is attacker-
  * controllable, so we NEVER trust its `status`. We only take the `reference`
- * from it and then re-poll Paynow authoritatively (`verifyAndSettle`) to decide
+ * from it and then re-poll Paynow authoritatively (`pollAndSettle`) to decide
  * whether the payment is really paid. A forged "status=Paid" cannot settle a
  * payment that Paynow hasn't actually confirmed.
  *
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Re-poll Paynow as the source of truth; ignore the POSTed status.
-    await verifyAndSettle(result.reference);
+    await pollAndSettle(result.reference);
 
     return new NextResponse("ok");
   } catch (err) {

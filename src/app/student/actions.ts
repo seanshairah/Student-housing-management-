@@ -4,10 +4,14 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/session";
 import {
-  startMobilePayment,
-  verifyAndSettle,
+  createSelfPayment,
+  pollAndSettle,
   type MobileMethod,
 } from "@/services/payments";
+import { type PaymentPurpose } from "@/core/billing/pricing";
+import { canAccessPayment } from "@/core/auth/access";
+import { rateLimit, PAYMENT_LIMIT } from "@/core/auth/rate-limit";
+import { audit } from "@/services/audit";
 import { requestRenewal } from "@/services/applications";
 import { notifyOwners } from "@/services/notifications";
 import { generateReference, toNumber } from "@/lib/utils";
@@ -32,15 +36,14 @@ async function getProfile(userId: string) {
  * reference for another student's payment is rejected before it reaches Paynow
  * or the settlement logic.
  */
+/**
+ * Does this payment belong to the signed-in student? Delegates to the shared
+ * access module so every ownership rule lives in one place across both
+ * platforms.
+ */
 async function ownsPayment(userId: string, reference: string) {
   if (!reference) return false;
-  const profile = await getProfile(userId);
-  if (!profile) return false;
-  const payment = await prisma.payment.findUnique({
-    where: { reference },
-    select: { studentProfileId: true },
-  });
-  return Boolean(payment) && payment!.studentProfileId === profile.id;
+  return canAccessPayment({ userId, role: "STUDENT" }, reference);
 }
 
 /** Request to renew / extend the stay for the coming term. */
@@ -78,6 +81,16 @@ const SEMESTER_MONTHS = 6;
 
 export type PayPurpose = "rent_month" | "rent_semester" | "transport";
 
+/**
+ * Map the portal's purpose labels onto the shared core's purposes. The core
+ * decides the price for each — the browser no longer sends an amount.
+ */
+const PURPOSE_MAP: Record<PayPurpose, PaymentPurpose> = {
+  rent_month: "RENT_MONTH",
+  rent_semester: "RENT_SEMESTER",
+  transport: "TRANSPORT_MONTH",
+};
+
 export interface MobilePayResult {
   success: boolean;
   error?: string;
@@ -97,79 +110,81 @@ export async function initiateMobilePaymentAction(input: {
   purpose: PayPurpose;
   phone?: string;
   method: MobileMethod | "web";
-  amount?: number; // used for transport (student-entered)
 }): Promise<MobilePayResult> {
   const session = await requireRole("STUDENT");
   try {
     const profile = await prisma.studentProfile.findUnique({
       where: { userId: session.userId },
-      include: { room: true },
+      select: { id: true },
     });
     if (!profile) return { success: false, error: "No student profile found." };
 
-    const isWeb = input.method === "web";
-    if (!isWeb) {
-      const digits = (input.phone || "").replace(/\D/g, "");
-      if (digits.length < 9)
-        return { success: false, error: "Enter a valid mobile number." };
-      if (input.method !== "ecocash" && input.method !== "onemoney")
-        return { success: false, error: "Choose a payment method." };
-    }
+    const purpose = PURPOSE_MAP[input.purpose];
+    if (!purpose) return { success: false, error: "Choose what you're paying for." };
 
-    const roomPrice = profile.room ? toNumber(profile.room.price) : 0;
-    let amount = 0;
-    let description = "";
-
-    if (input.purpose === "rent_month") {
-      amount = roomPrice;
-      description = `Rent — next month${profile.room ? ` (Room ${profile.room.number})` : ""}`;
-    } else if (input.purpose === "rent_semester") {
-      amount = roomPrice * SEMESTER_MONTHS;
-      description = `Rent — next semester (${SEMESTER_MONTHS} months)`;
-    } else {
-      // Transport is student-chosen, but validate + clamp server-side so the
-      // client can never submit a zero, negative, or absurd amount.
-      amount = Math.round(Number(input.amount || 0) * 100) / 100;
-      description = "Transport service";
-      if (!Number.isFinite(amount) || amount < 1 || amount > 1000) {
-        return {
-          success: false,
-          error: "Enter a transport amount between $1 and $1000.",
-        };
-      }
-    }
-
-    if (!amount || amount <= 0) {
+    // Every initiation round-trips to Paynow, so cap the rate.
+    const gate = await rateLimit({ key: `pay:${profile.id}`, ...PAYMENT_LIMIT });
+    if (!gate.allowed) {
       return {
         success: false,
-        error:
-          input.purpose === "transport"
-            ? "Enter the transport amount."
-            : "No rent amount is set for your room — please contact the owner.",
+        error: "Too many payment attempts. Please wait a few minutes and try again.",
       };
     }
 
-    const res = await startMobilePayment({
-      studentProfileId: profile.id,
-      amount,
-      description,
-      phone: input.phone,
+    if (input.method !== "web" && input.method !== "ecocash" && input.method !== "onemoney") {
+      return { success: false, error: "Choose a payment method." };
+    }
+
+    // The amount is NOT taken from the request. It used to be, for transport:
+    // the browser posted its own figure and the server only clamped it to
+    // $1–$1000, so a student could settle a $15 transport charge by sending $1.
+    // createSelfPayment prices every purpose from the student's own room and
+    // the platform's configured rates.
+    const res = await createSelfPayment({
+      profileId: profile.id,
+      purpose,
       method: input.method,
+      phone: input.phone,
     });
 
-    if (!res.ok)
-      return { success: false, error: res.error ?? "Could not start the payment." };
+    if (!res.ok) {
+      // Record why, so a failure that never reaches the Payment table still
+      // leaves a trace rather than living only in hosting provider logs.
+      await audit({
+        userId: session.userId,
+        actorEmail: session.email,
+        action: "payment.initiate_failed",
+        metadata: { purpose: input.purpose, method: input.method, reason: res.error ?? null },
+      }).catch(() => undefined);
+      return { success: false, error: res.error ?? "Could not start the payment.", reference: res.reference };
+    }
 
+    revalidatePath("/student/payments");
     return {
       success: true,
       reference: res.reference,
       instructions: res.instructions,
       redirectUrl: res.redirectUrl,
-      amount,
-      testMode: res.mode === "development",
+      amount: res.amount,
     };
   } catch (e) {
-    return { success: false, error: (e as Error).message };
+    // Never let an exception escape a payment action: an unhandled rejection in
+    // the browser takes the whole page to the error boundary, so the student
+    // sees a blank "Something went wrong" moments after pressing pay.
+    const detail = e instanceof Error ? e.message : String(e);
+    console.error("[payment.initiate] unhandled", detail);
+    await audit({
+      userId: session.userId,
+      actorEmail: session.email,
+      action: "payment.initiate_error",
+      metadata: { purpose: input.purpose, method: input.method, detail },
+    }).catch(() => undefined);
+    return {
+      success: false,
+      error:
+        "We couldn't start the payment. No money has left your account — " +
+        "please try again, or contact the office if it keeps happening.",
+    };
   }
 }
 
@@ -181,14 +196,14 @@ export async function checkMobilePaymentAction(
   if (!(await ownsPayment(session.userId, reference))) {
     return { status: "failed", error: "Payment not found." };
   }
-  const r = await verifyAndSettle(reference);
+  const r = await pollAndSettle(reference);
   if (r.status === "paid") {
     revalidatePath("/student/payments");
     revalidatePath("/student");
   }
   return {
     status: r.status,
-    error: r.status === "failed" ? r.providerStatus : undefined,
+    error: r.status === "failed" ? r.message : undefined,
   };
 }
 
@@ -205,12 +220,12 @@ export async function payNowAction(reference: string): Promise<ActionResult> {
     return { success: false, error: "Payment not found." };
   }
   try {
-    const r = await verifyAndSettle(reference);
+    const r = await pollAndSettle(reference);
     revalidatePath("/student/payments");
     revalidatePath("/student");
     if (r.status === "paid") return { success: true };
     if (r.status === "failed")
-      return { success: false, error: r.providerStatus ?? "Payment failed." };
+      return { success: false, error: r.message ?? "Payment failed." };
     return {
       success: false,
       error:
@@ -232,7 +247,7 @@ export async function confirmPaymentReturn(
     return { success: false, error: "Payment not found." };
   }
   try {
-    await verifyAndSettle(reference);
+    await pollAndSettle(reference);
     revalidatePath("/student/payments");
     revalidatePath("/student");
     return { success: true };

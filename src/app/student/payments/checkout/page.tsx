@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { CheckCircle2, CreditCard, Info, AlertTriangle } from "lucide-react";
 import { requireRole } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
-import { getPaynowConfig, ensurePaynowCheckoutUrl } from "@/services/payments";
+import { getPaynowConfig, resolveWebCheckout } from "@/services/payments";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -62,9 +62,9 @@ export default async function CheckoutPage({
   // test mode). Only fall through to an error card if Paynow can't open it.
   let checkoutError: string | null = null;
   if (!alreadyPaid && config.mode === "live") {
-    const { url, error } = await ensurePaynowCheckoutUrl(payment.reference);
-    if (url) redirect(url);
-    if (error && error !== "already-paid") checkoutError = error;
+    const outcome = await resolveWebCheckout(payment.reference);
+    if (outcome.kind === "redirect") redirect(outcome.url);
+    if (outcome.kind === "error") checkoutError = outcome.message;
   }
 
   return (

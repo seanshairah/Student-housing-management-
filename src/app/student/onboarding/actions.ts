@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/session";
 import { RoomStatus } from "@prisma/client";
 import { rentTierByKey } from "@/constants/rent";
+import { monthlyRentFor } from "@/core/billing/pricing";
 import type { ActionResult } from "@/types";
 
 /**
@@ -69,7 +70,11 @@ export async function completeOnboardingAction(
             number: roomNumber,
             type: tier.roomType,
             capacity: tier.capacity,
-            price: tier.monthlyRent ?? 0,
+            // Fall back to the platform's configured rate rather than 0.
+            // A room priced 0 cannot be billed, and monthlyRentFor() would
+            // silently substitute the default anyway — so the room record and
+            // the amount actually charged disagreed.
+            price: tier.monthlyRent ?? monthlyRentFor(tier.roomType),
             occupied: 0,
             status: RoomStatus.AVAILABLE,
           },

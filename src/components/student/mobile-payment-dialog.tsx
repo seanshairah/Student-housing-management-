@@ -59,14 +59,11 @@ export function MobilePaymentDialog({
   const [phase, setPhase] = React.useState<Phase>("form");
   const [phone, setPhone] = React.useState(defaultPhone ?? "");
   const [method, setMethod] = React.useState<MobileMethod>("ecocash");
-  const [customAmount, setCustomAmount] = React.useState("");
   const [instructions, setInstructions] = React.useState("");
   const [errorMsg, setErrorMsg] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [webBusy, setWebBusy] = React.useState(false);
   const pollRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const editableAmount = amount === undefined;
 
   const stopPolling = React.useCallback(() => {
     if (pollRef.current) {
@@ -88,12 +85,21 @@ export function MobilePaymentDialog({
   async function submit() {
     setBusy(true);
     setErrorMsg("");
-    const res = await initiateMobilePaymentAction({
-      purpose,
-      phone,
-      method,
-      amount: editableAmount ? Number(customAmount) : amount,
-    });
+    let res;
+    try {
+      res = await initiateMobilePaymentAction({ purpose, phone, method });
+    } catch {
+      // A throw here used to escape as an unhandled rejection and take the
+      // whole page to the error boundary — a blank "Something went wrong"
+      // instead of a message in this dialog, right after the student pressed
+      // pay. A failed payment must never blank the screen.
+      setBusy(false);
+      setErrorMsg(
+        "We couldn't reach the payment service. No money has left your account — " +
+          "please try again, or contact the office if it keeps happening.",
+      );
+      return;
+    }
     setBusy(false);
     if (!res.success || !res.reference) {
       setErrorMsg(res.error ?? "Could not start the payment.");
@@ -107,11 +113,16 @@ export function MobilePaymentDialog({
   async function payOnline() {
     setWebBusy(true);
     setErrorMsg("");
-    const res = await initiateMobilePaymentAction({
-      purpose,
-      method: "web",
-      amount: editableAmount ? Number(customAmount) : amount,
-    });
+    let res;
+    try {
+      res = await initiateMobilePaymentAction({ purpose, method: "web" });
+    } catch {
+      setWebBusy(false);
+      setErrorMsg(
+        "We couldn't reach the payment service. No money has left your account.",
+      );
+      return;
+    }
     if (res.success && res.redirectUrl) {
       window.location.href = res.redirectUrl;
       return; // navigating away
@@ -145,7 +156,9 @@ export function MobilePaymentDialog({
     }, 4000);
   }
 
-  const resolvedAmount = editableAmount ? Number(customAmount || 0) : amount ?? 0;
+  // Display only. The server prices the purpose and is the sole authority on
+  // what is actually charged.
+  const resolvedAmount = amount ?? 0;
 
   return (
     <Dialog
@@ -173,28 +186,12 @@ export function MobilePaymentDialog({
             </DialogHeader>
 
             <div className="space-y-4">
-              {editableAmount ? (
-                <div className="space-y-1.5">
-                  <Label htmlFor="mp-amount">Amount (USD)</Label>
-                  <Input
-                    id="mp-amount"
-                    type="number"
-                    min={1}
-                    step="0.01"
-                    inputMode="decimal"
-                    placeholder="e.g. 20"
-                    value={customAmount}
-                    onChange={(e) => setCustomAmount(e.target.value)}
-                  />
-                </div>
-              ) : (
-                <div className="rounded-xl bg-muted/60 p-3.5 text-center">
-                  <p className="text-xs text-muted-foreground">Amount</p>
-                  <p className="font-display text-2xl font-bold">
-                    {formatCurrency(resolvedAmount)}
-                  </p>
-                </div>
-              )}
+              <div className="rounded-xl bg-muted/60 p-3.5 text-center">
+                <p className="text-xs text-muted-foreground">Amount</p>
+                <p className="font-display text-2xl font-bold">
+                  {formatCurrency(resolvedAmount)}
+                </p>
+              </div>
 
               <div className="space-y-1.5">
                 <Label htmlFor="mp-method">Pay with</Label>
