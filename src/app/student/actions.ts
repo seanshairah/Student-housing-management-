@@ -9,6 +9,8 @@ import {
   type MobileMethod,
 } from "@/services/payments";
 import { type PaymentPurpose } from "@/core/billing/pricing";
+import { canAccessPayment } from "@/core/auth/access";
+import { rateLimit, PAYMENT_LIMIT } from "@/core/auth/rate-limit";
 import { requestRenewal } from "@/services/applications";
 import { notifyOwners } from "@/services/notifications";
 import { generateReference, toNumber } from "@/lib/utils";
@@ -33,15 +35,14 @@ async function getProfile(userId: string) {
  * reference for another student's payment is rejected before it reaches Paynow
  * or the settlement logic.
  */
+/**
+ * Does this payment belong to the signed-in student? Delegates to the shared
+ * access module so every ownership rule lives in one place across both
+ * platforms.
+ */
 async function ownsPayment(userId: string, reference: string) {
   if (!reference) return false;
-  const profile = await getProfile(userId);
-  if (!profile) return false;
-  const payment = await prisma.payment.findUnique({
-    where: { reference },
-    select: { studentProfileId: true },
-  });
-  return Boolean(payment) && payment!.studentProfileId === profile.id;
+  return canAccessPayment({ userId, role: "STUDENT" }, reference);
 }
 
 /** Request to renew / extend the stay for the coming term. */
@@ -119,6 +120,15 @@ export async function initiateMobilePaymentAction(input: {
 
     const purpose = PURPOSE_MAP[input.purpose];
     if (!purpose) return { success: false, error: "Choose what you're paying for." };
+
+    // Every initiation round-trips to Paynow, so cap the rate.
+    const gate = await rateLimit({ key: `pay:${profile.id}`, ...PAYMENT_LIMIT });
+    if (!gate.allowed) {
+      return {
+        success: false,
+        error: "Too many payment attempts. Please wait a few minutes and try again.",
+      };
+    }
 
     if (input.method !== "web" && input.method !== "ecocash" && input.method !== "onemoney") {
       return { success: false, error: "Choose a payment method." };
