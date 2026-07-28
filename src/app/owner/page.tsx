@@ -119,14 +119,14 @@ export default async function OwnerOverviewPage() {
         <StatCard label="Pending applications" value={stats.pendingApplications} icon="FileText" accent="amber" />
         <StatCard
           label="Expected monthly"
-          value={formatCurrency(stats.expectedMonthlyRevenue)}
+          value={formatCurrency(stats.expectedMonthlyIncome)}
           icon="TrendingUp"
           accent="brand"
-          hint={`${formatCurrency(stats.expectedRent)} rent · ${formatCurrency(stats.expectedTransport)} transport`}
+          hint={`${formatCurrency(stats.expectedMonthlyRent)} rent · ${formatCurrency(stats.expectedMonthlyTransport)} transport`}
         />
         <StatCard
           label="Rent collected (mo.)"
-          value={formatCurrency(stats.monthlyRevenue)}
+          value={formatCurrency(stats.collectedThisMonth)}
           icon="DollarSign"
           accent="emerald"
           hint={`${formatCurrency(stats.depositsCollected)} deposits held`}

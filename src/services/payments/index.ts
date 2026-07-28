@@ -5,6 +5,7 @@ import {
   ApplicationStatus,
   ApplicationType,
   RoomStatus,
+  ChargeStatus,
   type Prisma,
 } from "@prisma/client";
 import { generateReference, formatCurrency, formatDate, toNumber } from "@/lib/utils";
@@ -12,9 +13,22 @@ import {
   createPaynowPayment,
   createPaynowMobilePayment,
   verifyPaynowPayment,
+  getPaynowConfig,
   type MobileMethod,
 } from "./paynow";
-import { updateInvoiceAfterPayment, createInvoice } from "@/services/invoices";
+import {
+  monthlyRentFor,
+  priceFor,
+  periodFrom,
+  dueDateFromNow,
+  type PaymentPurpose,
+} from "@/core/billing/pricing";
+import {
+  raiseCharge,
+  allocatePayment,
+  deallocatePayment,
+} from "@/core/billing/ledger";
+import { updateInvoiceAfterPayment } from "@/services/invoices";
 import { createReceipt } from "@/services/receipts";
 import { sendTemplatedEmail } from "@/services/email";
 import { sendStatusSMS } from "@/services/sms";
@@ -100,129 +114,416 @@ export async function generatePaymentLink(
   return { payment, redirectUrl: paynow.redirectUrl };
 }
 
+export interface SelfPaymentResult {
+  ok: boolean;
+  reference?: string;
+  amount?: number;
+  redirectUrl?: string;
+  pollUrl?: string;
+  instructions?: string;
+  error?: string;
+}
+
 /**
- * Start an EcoCash / OneMoney mobile payment for an ad-hoc charge (e.g. next
- * month's rent, next semester's rent, transport). Creates an Invoice + Payment,
- * pushes the USSD prompt to the payer's phone, and returns a reference the
- * client can poll until it settles.
+ * Student-initiated payment (rent for a month/semester, or transport) via
+ * Paynow — either an EcoCash Express phone prompt or a web redirect. Creates
+ * the Payment + transaction record; the amount is computed server-side.
  */
-export async function startMobilePayment(opts: {
-  studentProfileId: string;
-  amount: number;
-  description: string;
-  phone?: string;
+export async function createSelfPayment(opts: {
+  profileId: string;
+  purpose: PaymentPurpose;
   method: MobileMethod | "web";
-}) {
-  const student = await prisma.studentProfile.findUnique({
-    where: { id: opts.studentProfileId },
+  phone?: string;
+}): Promise<SelfPaymentResult> {
+  const profile = await prisma.studentProfile.findUnique({
+    where: { id: opts.profileId },
+    include: { room: true },
   });
-  if (!student) throw new Error("Student not found");
+  if (!profile) return { ok: false, error: "Student profile not found" };
+
+  // The amount is computed here, on the server, from the student's own room and
+  // the platform's configured rates. The browser only ever sends a purpose.
+  const monthly = monthlyRentFor(
+    profile.room?.type,
+    profile.room ? toNumber(profile.room.price) : null,
+  );
+  const { amount, description, category, months } = priceFor(opts.purpose, monthly);
+
+  // Duplicate-charge guard: if an identical payment is already in flight (same
+  // student + amount, created seconds ago), reuse it instead of creating a
+  // second charge (double-click / retry after latency).
+  const recent = await prisma.payment.findFirst({
+    where: {
+      studentProfileId: profile.id,
+      amount,
+      status: PaymentStatus.PENDING,
+      createdAt: { gte: new Date(Date.now() - 90_000) },
+    },
+    include: { transaction: true },
+    orderBy: { createdAt: "desc" },
+  });
+  if (recent) {
+    return {
+      ok: true,
+      reference: recent.reference,
+      amount,
+      pollUrl: recent.transaction?.pollUrl ?? undefined,
+      redirectUrl: recent.paymentLink ?? undefined,
+      instructions:
+        "You already have a payment in progress for this amount — check your phone or wait for it to confirm.",
+    };
+  }
 
   const reference = generateReference("PAY");
-  const invoice = await createInvoice({
-    studentProfileId: opts.studentProfileId,
-    description: opts.description,
-    amount: opts.amount,
-    dueInDays: 7,
+
+  // Raise the charge BEFORE taking the money.
+  //
+  // Previously a self-service payment created a Payment row with no charge and
+  // no invoice behind it, so the student's balance never moved when they paid
+  // and the owner's reports could not see what the money was for. The charge is
+  // the thing the ledger derives balances from, so it has to exist first.
+  const period = periodFrom(new Date(), months);
+  const charge = await raiseCharge({
+    studentProfileId: profile.id,
+    category,
+    description,
+    amount,
+    dueDate: dueDateFromNow(),
+    periodStart: period.start,
+    periodEnd: period.end,
   });
 
-  // ── Web redirect (Paynow hosted checkout — card / EcoCash / other) ──
-  if (opts.method === "web") {
-    const result = await createPaynowPayment({
+  if (opts.method !== "web") {
+    const phone = (opts.phone || "").trim();
+    if (phone.replace(/[^\d]/g, "").length < 9) {
+      // Nothing was sent to Paynow, so withdraw the charge we just raised.
+      await cancelUnpaidCharge(charge.id);
+      return { ok: false, error: "Enter a valid mobile money number." };
+    }
+    const r = await createPaynowMobilePayment({
       reference,
-      amount: opts.amount,
-      email: student.email,
-      description: opts.description,
+      amount,
+      email: profile.email,
+      description,
+      phone,
+      method: opts.method,
     });
     await prisma.payment.create({
       data: {
         reference,
-        studentProfileId: opts.studentProfileId,
-        invoiceId: invoice.id,
-        amount: opts.amount,
-        status: PaymentStatus.PENDING,
-        paymentLink: result.redirectUrl,
+        studentProfileId: profile.id,
+        amount,
+        category,
+        method: "PAYNOW",
+        // Ambiguous (network/timeout) stays PENDING so polling/webhook can
+        // still resolve it — never auto-fail an uncertain charge.
+        status: r.ok || r.ambiguous ? PaymentStatus.PENDING : PaymentStatus.FAILED,
         transaction: {
           create: {
             provider: "paynow",
-            pollUrl: result.pollUrl,
-            providerRef: result.providerRef,
-            rawStatus: result.ok
-              ? result.mode === "development"
-                ? "mock-initiated"
-                : "initiated"
-              : result.error ?? "error",
+            pollUrl: r.pollUrl,
+            providerRef: r.providerRef,
+            rawStatus: r.ok ? `${opts.method}-prompt-sent` : r.ambiguous ? "uncertain" : r.error,
           },
         },
       },
     });
-    await audit({
-      action: "payment.web_initiated",
-      entityType: "Payment",
-      metadata: { reference, amount: opts.amount, mode: result.mode, ok: result.ok, error: result.error ?? null },
-    });
-    return {
-      reference,
-      ok: result.ok,
-      redirectUrl: result.redirectUrl,
-      instructions: undefined as string | undefined,
-      error: result.error,
-      mode: result.mode,
-    };
+    if (!r.ok) {
+      // A hard decline means no money will arrive, so withdraw the charge we
+      // raised rather than leaving the student owing a debt they never agreed
+      // to. An ambiguous result keeps the charge: the payment may still land.
+      if (!r.ambiguous) await cancelUnpaidCharge(charge.id);
+      return {
+        ok: false,
+        reference,
+        error: r.ambiguous
+          ? "We couldn't confirm the request reached EcoCash. Please don't pay again yet — check your phone, then your payment history in a minute."
+          : r.error,
+      };
+    }
+    return { ok: true, reference, amount, pollUrl: r.pollUrl, instructions: r.instructions };
   }
 
-  // ── EcoCash / OneMoney express (USSD phone prompt) ──
-  const result = await createPaynowMobilePayment({
+  // Web redirect (Paynow hosted checkout)
+  const r = await createPaynowPayment({
     reference,
-    amount: opts.amount,
-    email: student.email,
-    phone: opts.phone ?? "",
-    method: opts.method,
-    description: opts.description,
+    amount,
+    email: profile.email,
+    description,
   });
-
   await prisma.payment.create({
     data: {
       reference,
-      studentProfileId: opts.studentProfileId,
-      invoiceId: invoice.id,
-      amount: opts.amount,
+      studentProfileId: profile.id,
+      amount,
+      category,
+      method: "PAYNOW",
       status: PaymentStatus.PENDING,
+      paymentLink: r.redirectUrl,
       transaction: {
         create: {
           provider: "paynow",
-          pollUrl: result.pollUrl,
-          providerRef: result.providerRef,
-          // Store the real Paynow error on failure so it can be diagnosed.
-          rawStatus: result.ok
-            ? result.status ?? "sent"
-            : result.error ?? "error",
+          pollUrl: r.pollUrl,
+          providerRef: r.providerRef,
+          rawStatus: r.mode === "development" ? "mock-initiated" : "initiated",
+        },
+      },
+    },
+  });
+  if (!r.ok) {
+    if (!r.ambiguous) await cancelUnpaidCharge(charge.id);
+    return { ok: false, reference, error: r.error };
+  }
+  return { ok: true, reference, amount, redirectUrl: r.redirectUrl };
+}
+
+/**
+ * Withdraw a charge that was raised for a payment attempt which then failed
+ * outright. Only ever touches a charge nothing has been allocated against, so
+ * it can never erase a debt the student has partly paid.
+ */
+async function cancelUnpaidCharge(chargeId: string): Promise<void> {
+  await prisma.charge
+    .updateMany({
+      where: {
+        id: chargeId,
+        status: ChargeStatus.OUTSTANDING,
+        allocations: { none: {} },
+      },
+      data: {
+        status: ChargeStatus.CANCELLED,
+        adjustmentNote: "Withdrawn automatically — payment initiation failed.",
+      },
+    })
+    .catch(() => undefined);
+}
+
+/**
+ * Resolve how to collect a pending web payment.
+ *
+ * In development we use the internal simulated checkout. In LIVE mode the
+ * student must be sent to Paynow's own hosted page — never our internal page,
+ * which cannot take money. If the payment already has a real Paynow browser
+ * link we reuse it; otherwise (e.g. it was started as an EcoCash prompt) we
+ * create a fresh Paynow web transaction for the same reference and persist the
+ * new link + poll URL so the return/webhook flow can still verify it.
+ */
+export async function resolveWebCheckout(
+  reference: string,
+): Promise<
+  | { kind: "paid" }
+  | { kind: "mock" }
+  | { kind: "redirect"; url: string }
+  | { kind: "error"; message: string }
+> {
+  const config = getPaynowConfig();
+  const payment = await prisma.payment.findUnique({
+    where: { reference },
+    include: { transaction: true, studentProfile: true, invoice: true },
+  });
+  if (!payment) return { kind: "error", message: "Payment not found" };
+  if (payment.status === PaymentStatus.PAID) return { kind: "paid" };
+  if (payment.status === PaymentStatus.FAILED) {
+    return { kind: "error", message: "This payment was cancelled or failed. Please start a new one." };
+  }
+
+  // Development: the internal simulated checkout is the intended flow.
+  if (config.mode === "development") return { kind: "mock" };
+
+  // Live: reuse an existing real Paynow link if we have one.
+  const existing = payment.paymentLink;
+  const isRealPaynowLink =
+    !!existing && /^https?:\/\//i.test(existing) && existing.includes("paynow.co.zw");
+  if (isRealPaynowLink) return { kind: "redirect", url: existing! };
+
+  // No usable hosted link yet — create a fresh Paynow web transaction.
+  const r = await createPaynowPayment({
+    reference: payment.reference,
+    amount: toNumber(payment.amount),
+    email: payment.studentProfile.email,
+    description: payment.invoice?.description || "Accommodation payment",
+  });
+  if (!r.ok || !r.redirectUrl) {
+    return {
+      kind: "error",
+      message: r.error || "We couldn't reach Paynow just now. Please try again in a moment.",
+    };
+  }
+
+  await prisma.payment.update({
+    where: { id: payment.id },
+    data: {
+      paymentLink: r.redirectUrl,
+      transaction: {
+        upsert: {
+          create: {
+            provider: "paynow",
+            pollUrl: r.pollUrl,
+            providerRef: r.providerRef,
+            rawStatus: "initiated",
+          },
+          update: {
+            pollUrl: r.pollUrl,
+            providerRef: r.providerRef,
+            rawStatus: "initiated",
+          },
         },
       },
     },
   });
 
-  await audit({
-    action: "payment.mobile_initiated",
-    entityType: "Payment",
-    metadata: {
-      reference,
-      amount: opts.amount,
-      method: opts.method,
-      mode: result.mode,
-      ok: result.ok,
-      error: result.error ?? null,
-    },
-  });
+  return { kind: "redirect", url: r.redirectUrl };
+}
 
-  return {
-    reference,
-    ok: result.ok,
-    instructions: result.instructions,
-    redirectUrl: undefined as string | undefined,
-    error: result.error,
-    mode: result.mode,
-  };
+/**
+ * Poll a payment's status (used by the EcoCash Express client). If Paynow
+ * reports paid, settle it (idempotent). Returns a simple status string.
+ */
+export async function pollAndSettle(
+  reference: string,
+): Promise<{ status: "paid" | "pending" | "failed"; message?: string }> {
+  const payment = await prisma.payment.findUnique({
+    where: { reference },
+    include: { transaction: true },
+  });
+  if (!payment) return { status: "failed", message: "Payment not found" };
+  // Terminal states never change from a poll.
+  if (payment.status === PaymentStatus.PAID) return { status: "paid" };
+  if (
+    payment.status === PaymentStatus.FAILED ||
+    payment.status === PaymentStatus.CANCELLED ||
+    payment.status === PaymentStatus.REFUNDED
+  ) {
+    return { status: "failed", message: PAYMENT_STATUS_LABEL[payment.status] };
+  }
+
+  const pollUrl = payment.transaction?.pollUrl;
+  if (!pollUrl || pollUrl.startsWith("mock://")) {
+    // No verifiable provider poll URL. Only auto-settle the simulated mock in
+    // development; in live we can NEVER settle without Paynow confirming.
+    if (getPaynowConfig().mode === "development") {
+      await settlePayment(reference);
+      return { status: "paid" };
+    }
+    return { status: "pending" };
+  }
+
+  const verify = await verifyPaynowPayment(pollUrl);
+  switch (verify.outcome) {
+    case "paid":
+      await settlePayment(reference);
+      return { status: "paid" };
+    case "cancelled":
+      await setPaymentStatus(reference, PaymentStatus.CANCELLED, verify.status);
+      return { status: "failed", message: "This payment was cancelled." };
+    case "refunded":
+      await setPaymentStatus(reference, PaymentStatus.REFUNDED, verify.status);
+      return { status: "failed", message: "This payment was refunded / reversed." };
+    case "failed":
+      await failPayment(reference, verify.status);
+      return { status: "failed", message: verify.status };
+    case "processing":
+      await setPaymentStatus(reference, PaymentStatus.PROCESSING, verify.status);
+      return { status: "pending", message: "Payment is processing." };
+    default:
+      return { status: "pending", message: verify.status };
+  }
+}
+
+const PAYMENT_STATUS_LABEL: Record<string, string> = {
+  PENDING: "Pending",
+  PROCESSING: "Processing",
+  PAID: "Paid",
+  FAILED: "Failed",
+  CANCELLED: "Cancelled",
+  REFUNDED: "Refunded",
+};
+
+/**
+ * ── Payment state machine ────────────────────────────────────────────────
+ *
+ * Every transition a payment is allowed to make, and nothing else. Anything
+ * absent from this table is rejected, which is what stops a late or forged
+ * out-of-order provider callback from rewriting settled history.
+ *
+ *   PENDING    → PROCESSING, PAID, FAILED, CANCELLED
+ *   PROCESSING → PAID, FAILED, CANCELLED
+ *   PAID       → REFUNDED            (the only way out of PAID)
+ *   FAILED     → PENDING             (provider retry of the same reference)
+ *   CANCELLED  → (terminal)
+ *   REFUNDED   → (terminal)
+ *
+ * PAID is promoted only by settlePayment(), and only after Paynow itself has
+ * confirmed. No other function may set it.
+ */
+const ALLOWED_TRANSITIONS: Record<PaymentStatus, PaymentStatus[]> = {
+  [PaymentStatus.PENDING]: [
+    PaymentStatus.PROCESSING,
+    PaymentStatus.PAID,
+    PaymentStatus.FAILED,
+    PaymentStatus.CANCELLED,
+  ],
+  [PaymentStatus.PROCESSING]: [
+    PaymentStatus.PAID,
+    PaymentStatus.FAILED,
+    PaymentStatus.CANCELLED,
+  ],
+  [PaymentStatus.PAID]: [PaymentStatus.REFUNDED],
+  [PaymentStatus.FAILED]: [PaymentStatus.PENDING],
+  [PaymentStatus.CANCELLED]: [],
+  [PaymentStatus.REFUNDED]: [],
+};
+
+export function canTransition(from: PaymentStatus, to: PaymentStatus): boolean {
+  if (from === to) return true;
+  return ALLOWED_TRANSITIONS[from]?.includes(to) ?? false;
+}
+
+/**
+ * Move a payment to a non-paid status, honouring the state machine above.
+ * Never promotes a payment to PAID — only settlePayment does that.
+ *
+ * A refund is the one legal exit from PAID: when it happens the money must also
+ * come back off the ledger, so the charges it had settled go back to
+ * outstanding and the student is billed for them again.
+ */
+async function setPaymentStatus(
+  reference: string,
+  status: PaymentStatus,
+  rawStatus?: string,
+) {
+  const payment = await prisma.payment.findUnique({
+    where: { reference },
+    include: { transaction: true },
+  });
+  if (!payment) return null;
+
+  if (!canTransition(payment.status, status)) {
+    // Not an error — this is the guard doing its job against a late or
+    // duplicated provider callback. Record it and leave the payment alone.
+    console.warn("[payments] rejected illegal transition", {
+      reference,
+      from: payment.status,
+      to: status,
+    });
+    return payment;
+  }
+  if (payment.status === status) return payment;
+
+  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    if (status === PaymentStatus.REFUNDED) {
+      await deallocatePayment(payment.id, tx);
+    }
+    return tx.payment.update({
+      where: { id: payment.id },
+      data: {
+        status,
+        ...(payment.transaction && rawStatus
+          ? { transaction: { update: { rawStatus } } }
+          : {}),
+      },
+    });
+  });
 }
 
 /**
@@ -251,12 +552,22 @@ export async function settlePayment(reference: string) {
       data: { status: PaymentStatus.PAID, paidAt: new Date() },
     });
     const r = await createReceipt(payment.id, toNumber(payment.amount), tx);
+
+    // Apply the money to the student's outstanding charges, inside the same
+    // transaction that marked it paid — the balance can never be observed in a
+    // state where the payment is settled but the debt is still standing.
+    // Idempotent, so a replayed webhook re-derives the same allocations.
+    await allocatePayment(payment.id, tx);
+
     if (payment.invoiceId) {
       await updateInvoiceAfterPayment(payment.invoiceId, tx);
-      // Advance any linked application to PAID (invoice already loaded above).
-      if (payment.invoice?.applicationId) {
+      // Advance any linked application to PAID.
+      const inv = await tx.invoice.findUnique({
+        where: { id: payment.invoiceId },
+      });
+      if (inv?.applicationId) {
         const app = await tx.application.update({
-          where: { id: payment.invoice.applicationId },
+          where: { id: inv.applicationId },
           data: { status: ApplicationStatus.PAID },
         });
 
@@ -321,10 +632,12 @@ export async function settlePayment(reference: string) {
       data: { status: StudentStatus.ACTIVE },
     });
     return r;
-  },
-  // Neon is a remote/serverless DB, so the several sequential writes here can
-  // exceed Prisma's default 5s interactive-transaction timeout. Give it room.
-  { maxWait: 10000, timeout: 20000 });
+  }, {
+    // Settlement makes many round-trips; the pooled serverless connection to
+    // Neon adds latency to each, so give it more than Prisma's 5s default.
+    maxWait: 10_000,
+    timeout: 20_000,
+  });
 
   // Notifications (best-effort, outside the transaction).
   await sendTemplatedEmail(
@@ -379,98 +692,5 @@ export async function settlePayment(reference: string) {
 }
 
 export async function failPayment(reference: string, reason?: string) {
-  const payment = await prisma.payment.findUnique({ where: { reference } });
-  if (!payment) return null;
-  // State-machine safety: a settled payment must never be downgraded by a late
-  // or out-of-order "failed" signal (SUCCEEDED -> FAILED is not allowed).
-  if (payment.status === PaymentStatus.PAID) return payment;
-  return prisma.payment.update({
-    where: { id: payment.id },
-    data: { status: PaymentStatus.FAILED, transaction: { update: { rawStatus: reason } } },
-  });
-}
-
-/**
- * Return a Paynow hosted-checkout URL to redirect the payer to (the "web"
- * flow). Reuses an existing Paynow browserurl if the payment already has one;
- * otherwise initiates a fresh hosted checkout for this payment and stores the
- * link + poll URL. Returns an error message (from Paynow) when it can't.
- */
-export async function ensurePaynowCheckoutUrl(
-  reference: string,
-): Promise<{ url?: string; error?: string }> {
-  const payment = await prisma.payment.findUnique({
-    where: { reference },
-    include: { studentProfile: true, invoice: true, transaction: true },
-  });
-  if (!payment) return { error: "Payment not found." };
-  if (payment.status === PaymentStatus.PAID) return { error: "already-paid" };
-
-  // Reuse an existing Paynow hosted URL if we already have one.
-  if (payment.paymentLink && /paynow\.co\.zw/i.test(payment.paymentLink)) {
-    return { url: payment.paymentLink };
-  }
-
-  const r = await createPaynowPayment({
-    reference: payment.reference,
-    amount: toNumber(payment.amount),
-    email: payment.studentProfile.email,
-    description: payment.invoice?.description ?? "Accommodation payment",
-  });
-  if (!r.ok || !r.redirectUrl) {
-    return { error: r.error ?? "Could not open the Paynow checkout page." };
-  }
-
-  await prisma.payment
-    .update({
-      where: { id: payment.id },
-      data: {
-        paymentLink: r.redirectUrl,
-        transaction: {
-          update: {
-            pollUrl: r.pollUrl ?? payment.transaction?.pollUrl ?? undefined,
-            providerRef: r.providerRef ?? payment.transaction?.providerRef ?? undefined,
-            rawStatus: "web-initiated",
-          },
-        },
-      },
-    })
-    .catch(() => undefined);
-
-  return { url: r.redirectUrl };
-}
-
-/**
- * Authoritatively check a payment against Paynow and settle/fail it.
- *
- * This is the single source of truth for whether a payment is paid — it
- * re-polls Paynow's pollUrl rather than trusting any caller-supplied status.
- * Use it from the client poll, the return page, AND the (unauthenticated)
- * server-to-server webhook, so a forged "Paid" callback can never settle a
- * payment that Paynow hasn't actually confirmed. Idempotent.
- */
-export async function verifyAndSettle(
-  reference: string,
-): Promise<{ status: "paid" | "pending" | "failed"; providerStatus?: string }> {
-  const payment = await prisma.payment.findUnique({
-    where: { reference },
-    include: { transaction: true },
-  });
-  if (!payment) return { status: "failed" };
-  if (payment.status === PaymentStatus.PAID) return { status: "paid" };
-  if (payment.status === PaymentStatus.FAILED) return { status: "failed" };
-
-  const pollUrl = payment.transaction?.pollUrl;
-  if (!pollUrl) return { status: "pending" };
-
-  const v = await verifyPaynowPayment(pollUrl);
-  if (v.paid) {
-    await settlePayment(reference);
-    return { status: "paid", providerStatus: v.status };
-  }
-  if (/cancel|fail|disputed|refunded|reversed/i.test(v.status)) {
-    await failPayment(reference, v.status);
-    return { status: "failed", providerStatus: v.status };
-  }
-  return { status: "pending", providerStatus: v.status };
+  return setPaymentStatus(reference, PaymentStatus.FAILED, reason);
 }

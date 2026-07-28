@@ -13,34 +13,48 @@ import crypto from "crypto";
 const PAYNOW_INITIATE_URL = "https://www.paynow.co.zw/interface/initiatetransaction";
 const PAYNOW_REMOTE_URL = "https://www.paynow.co.zw/interface/remotetransaction";
 
+/** Paynow mobile-money expects the local MSISDN format, e.g. "0771234567". */
+export function toLocalZwPhone(phone: string): string {
+  let p = (phone || "").replace(/[^\d]/g, "");
+  if (p.startsWith("263")) p = "0" + p.slice(3);
+  else if (p.startsWith("7") && p.length === 9) p = "0" + p;
+  return p;
+}
+
 export interface PaynowConfig {
   integrationId: string;
   integrationKey: string;
   returnUrl: string;
   resultUrl: string;
-  /**
-   * When the Paynow integration is in TEST mode, Paynow rejects a request
-   * unless `authemail` equals the merchant's registered email. Set
-   * PAYNOW_AUTH_EMAIL to that email while testing; leave it blank in live so
-   * each payer's own email is used.
-   */
-  authEmail: string;
   mode: "development" | "live";
 }
 
 export function getPaynowConfig(): PaynowConfig {
+  const integrationId = process.env.PAYNOW_INTEGRATION_ID || "";
+  const integrationKey = process.env.PAYNOW_INTEGRATION_KEY || "";
+  const hasCredentials = Boolean(integrationId && integrationKey);
+
+  // Fail closed in production.
+  //
+  // This used to silently fall back to "development" whenever the Paynow
+  // credentials were missing — and in development mode verifyPaynowPayment()
+  // reports every payment as Paid without contacting anyone. A production
+  // deploy that lost its Paynow env vars would therefore have marked every
+  // student's rent as settled for free, and looked healthy doing it.
+  if (process.env.NODE_ENV === "production" && !hasCredentials) {
+    throw new Error(
+      "PAYNOW_INTEGRATION_ID / PAYNOW_INTEGRATION_KEY are not set. Refusing to " +
+        "run in mock payment mode in production — mock mode settles every " +
+        "payment as paid without taking money.",
+    );
+  }
+
   return {
-    integrationId: process.env.PAYNOW_INTEGRATION_ID || "",
-    integrationKey: process.env.PAYNOW_INTEGRATION_KEY || "",
+    integrationId,
+    integrationKey,
     returnUrl: process.env.PAYNOW_RETURN_URL || "http://localhost:3000/student/payments/return",
     resultUrl: process.env.PAYNOW_RESULT_URL || "http://localhost:3000/api/payments/paynow/result",
-    authEmail: process.env.PAYNOW_AUTH_EMAIL || "",
-    mode:
-      process.env.PAYNOW_MODE === "live" &&
-      process.env.PAYNOW_INTEGRATION_ID &&
-      process.env.PAYNOW_INTEGRATION_KEY
-        ? "live"
-        : "development",
+    mode: process.env.PAYNOW_MODE === "live" && hasCredentials ? "live" : "development",
   };
 }
 
@@ -57,6 +71,8 @@ export interface InitiatePaymentResult {
   pollUrl?: string;
   providerRef?: string;
   error?: string;
+  /** True when the outcome is uncertain (network/timeout) — NOT a hard decline. */
+  ambiguous?: boolean;
   mode: "development" | "live";
 }
 
@@ -74,21 +90,22 @@ function toUrlEncoded(data: Record<string, string>): string {
 
 function parsePaynowResponse(text: string): Record<string, string> {
   const out: Record<string, string> = {};
-  // Paynow returns URL-encoded key=value pairs separated by "&" (its API
-  // format); some endpoints use newlines. Split on both so parsing is robust —
-  // otherwise a whole response collapses into the first key and every call
-  // looks "declined".
-  for (const pair of text.split(/[&\r\n]+/)) {
+  // Paynow returns a URL-encoded query string, e.g.
+  //   status=Ok&browserurl=https%3A%2F%2F...&pollurl=...&hash=...
+  // Some endpoints separate with newlines instead, so split on both.
+  for (const pair of text.split(/[&\n\r]+/)) {
     const idx = pair.indexOf("=");
     if (idx < 0) continue;
     const key = pair.slice(0, idx).trim().toLowerCase();
     if (!key) continue;
-    const raw = pair.slice(idx + 1).trim().replace(/\+/g, " ");
+    const rawVal = pair.slice(idx + 1).trim().replace(/\+/g, " ");
+    let value = rawVal;
     try {
-      out[key] = decodeURIComponent(raw);
+      value = decodeURIComponent(rawVal);
     } catch {
-      out[key] = raw;
+      /* leave value as-is if it isn't valid percent-encoding */
     }
+    out[key] = value;
   }
   return out;
 }
@@ -114,15 +131,14 @@ export async function createPaynowPayment(
   }
 
   try {
-    const returnUrl = `${config.returnUrl}${config.returnUrl.includes("?") ? "&" : "?"}ref=${encodeURIComponent(input.reference)}`;
     const values: Record<string, string> = {
       id: config.integrationId,
       reference: input.reference,
       amount: input.amount.toFixed(2),
       additionalinfo: input.description,
-      returnurl: returnUrl,
+      returnurl: config.returnUrl,
       resulturl: config.resultUrl,
-      authemail: config.authEmail || input.email,
+      authemail: process.env.PAYNOW_AUTH_EMAIL || input.email,
       status: "Message",
     };
     values.hash = paynowHash(values, config.integrationKey);
@@ -143,53 +159,46 @@ export async function createPaynowPayment(
         providerRef: parsed.paynowreference,
       };
     }
-    return { ok: false, mode: "live", error: parsed.error || "Paynow error" };
+    return {
+      ok: false,
+      mode: "live",
+      error: parsed.error || parsed.status || "Paynow error",
+    };
   } catch (e) {
-    return { ok: false, mode: "live", error: (e as Error).message };
+    // Network/timeout: the request MAY have reached Paynow. Ambiguous, not failed.
+    return { ok: false, ambiguous: true, mode: "live", error: (e as Error).message };
   }
 }
 
-// ── Express Checkout (mobile money — EcoCash / OneMoney) ──────────
-export type MobileMethod = "ecocash" | "onemoney";
+/** Mobile-money rails Paynow can push a USSD prompt to. */
+export type MobileMethod = "ecocash" | "onemoney" | "innbucks";
 
-export interface InitiateMobileInput {
-  reference: string;
-  amount: number;
-  email: string;
-  phone: string; // the payer's mobile number
-  method: MobileMethod;
-  description: string;
+export interface InitiateMobileInput extends InitiatePaymentInput {
+  phone: string;
+  method?: MobileMethod;
 }
 
 export interface InitiateMobileResult {
   ok: boolean;
   pollUrl?: string;
-  instructions?: string; // shown to the payer ("check your phone…")
   providerRef?: string;
+  instructions?: string;
   error?: string;
+  /** True when the outcome is uncertain (network/timeout) — NOT a hard decline. */
+  ambiguous?: boolean;
   mode: "development" | "live";
-  status?: "sent" | "error";
-}
-
-/** Normalise a mobile number to the local 07xxxxxxxx format Paynow expects. */
-export function toPaynowPhone(phone: string): string {
-  let p = (phone || "").replace(/[^\d]/g, "");
-  if (p.startsWith("00")) p = p.slice(2);
-  if (p.startsWith("263")) p = "0" + p.slice(3);
-  else if (p.startsWith("7") && p.length === 9) p = "0" + p;
-  return p;
 }
 
 /**
- * Initiate an EcoCash / OneMoney "Express Checkout" payment. This asks Paynow
- * to push a USSD prompt to the payer's phone (they approve with their PIN) —
- * no browser redirect. Poll the returned pollUrl to see when it's paid.
+ * Create a Paynow *mobile-money (Express)* payment — sends a USSD prompt
+ * directly to the payer's phone (e.g. EcoCash). Returns a poll URL to check
+ * status. In development mode this is mocked and auto-approves on poll.
  */
 export async function createPaynowMobilePayment(
   input: InitiateMobileInput,
 ): Promise<InitiateMobileResult> {
   const config = getPaynowConfig();
-  const phone = toPaynowPhone(input.phone);
+  const method = input.method ?? "ecocash";
 
   if (config.mode === "development") {
     return {
@@ -197,8 +206,8 @@ export async function createPaynowMobilePayment(
       mode: "development",
       pollUrl: `mock://poll/${input.reference}`,
       providerRef: `MOCK-${input.reference}`,
-      status: "sent",
-      instructions: `Test mode: a real ${input.method === "ecocash" ? "EcoCash" : "OneMoney"} prompt would be sent to ${phone}. This will auto-confirm shortly.`,
+      instructions:
+        "Development mode — no real prompt is sent; this auto-approves.",
     };
   }
 
@@ -210,9 +219,9 @@ export async function createPaynowMobilePayment(
       additionalinfo: input.description,
       returnurl: config.returnUrl,
       resulturl: config.resultUrl,
-      authemail: config.authEmail || input.email,
-      phone,
-      method: input.method,
+      authemail: process.env.PAYNOW_AUTH_EMAIL || input.email,
+      phone: toLocalZwPhone(input.phone),
+      method,
       status: "Message",
     };
     values.hash = paynowHash(values, config.integrationKey);
@@ -229,45 +238,55 @@ export async function createPaynowMobilePayment(
         ok: true,
         mode: "live",
         pollUrl: parsed.pollurl,
+        providerRef: parsed.paynowreference,
         instructions:
           parsed.instructions ||
-          "Check your phone and enter your PIN to approve the payment.",
-        providerRef: parsed.paynowreference,
-        status: "sent",
+          "Check your phone and enter your EcoCash PIN to approve the payment.",
       };
     }
     return {
       ok: false,
       mode: "live",
-      status: "error",
-      error:
-        parsed.error ||
-        "Paynow declined this mobile payment. Confirm the number and that your account supports this method.",
+      error: parsed.error || parsed.status || "Paynow declined the request.",
     };
   } catch (e) {
-    return { ok: false, mode: "live", status: "error", error: (e as Error).message };
+    // Network/timeout: the prompt MAY have been sent. Ambiguous, not failed.
+    return { ok: false, ambiguous: true, mode: "live", error: (e as Error).message };
   }
+}
+
+export type PaynowOutcome =
+  | "paid"
+  | "pending"
+  | "processing"
+  | "cancelled"
+  | "refunded"
+  | "failed";
+
+/**
+ * Map a raw Paynow status string to a coarse outcome. Anything we don't
+ * explicitly recognise as settled stays "pending" — we NEVER treat an unknown
+ * status as paid, so a payment can only be marked paid on an explicit Paynow
+ * "Paid"/"Delivered"/"Awaiting Delivery" (money received) status.
+ */
+export function classifyPaynowStatus(raw: string): PaynowOutcome {
+  const s = (raw || "").toLowerCase();
+  if (s.includes("paid") || s.includes("awaiting delivery") || s.includes("delivered"))
+    return "paid";
+  if (s.includes("refund") || s.includes("revers")) return "refunded";
+  if (s.includes("cancel")) return "cancelled";
+  if (s.includes("disput") || s.includes("fail") || s.includes("declin"))
+    return "failed";
+  if (s.includes("process")) return "processing";
+  // "Sent", "Created", "Pending" or anything unrecognised → not yet paid.
+  return "pending";
 }
 
 export interface VerifyResult {
   paid: boolean;
   status: string;
+  outcome: PaynowOutcome;
   raw?: Record<string, string>;
-}
-
-/**
- * Paynow statuses that mean the money has actually been received by the
- * merchant. "Paid" is the immediate confirmation; "Awaiting Delivery" and
- * "Delivered" are later fulfilment states that still imply the funds cleared.
- * We deliberately do NOT include initiated ("Created"/"Sent") or any
- * negative/reversal state, so a payment is only ever marked paid when Paynow
- * has genuinely confirmed the funds.
- */
-const PAID_STATUSES = new Set(["paid", "awaiting delivery", "delivered"]);
-
-/** True when Paynow reports a status that means the funds were received. */
-export function isPaynowPaidStatus(status: string | undefined | null): boolean {
-  return PAID_STATUSES.has((status || "").trim().toLowerCase());
 }
 
 /** Poll Paynow (or simulate) to verify payment status. */
@@ -275,19 +294,22 @@ export async function verifyPaynowPayment(
   pollUrl: string,
 ): Promise<VerifyResult> {
   const config = getPaynowConfig();
-  if (config.mode === "development" || pollUrl.startsWith("mock://")) {
-    return { paid: true, status: "Paid" };
+  if (config.mode === "development") {
+    return { paid: true, status: "Paid", outcome: "paid" };
+  }
+  // A mock/empty poll URL in LIVE mode cannot be verified against Paynow —
+  // never treat it as paid, or we'd settle a payment nobody actually made.
+  if (!pollUrl || pollUrl.startsWith("mock://")) {
+    return { paid: false, status: "Unverifiable", outcome: "pending" };
   }
   try {
     const res = await fetch(pollUrl);
     const parsed = parsePaynowResponse(await res.text());
-    return {
-      paid: isPaynowPaidStatus(parsed.status),
-      status: parsed.status || "Unknown",
-      raw: parsed,
-    };
+    const status = parsed.status || "Unknown";
+    const outcome = classifyPaynowStatus(status);
+    return { paid: outcome === "paid", status, outcome, raw: parsed };
   } catch (e) {
-    return { paid: false, status: `Error: ${(e as Error).message}` };
+    return { paid: false, status: `Error: ${(e as Error).message}`, outcome: "pending" };
   }
 }
 
@@ -297,7 +319,7 @@ export function parsePaynowResult(
 ): { reference: string; paid: boolean; status: string } {
   return {
     reference: body.reference || "",
-    paid: isPaynowPaidStatus(body.status),
+    paid: (body.status || "").toLowerCase() === "paid",
     status: body.status || "Unknown",
   };
 }
