@@ -85,11 +85,21 @@ export function MobilePaymentDialog({
   async function submit() {
     setBusy(true);
     setErrorMsg("");
-    const res = await initiateMobilePaymentAction({
-      purpose,
-      phone,
-      method,
-    });
+    let res;
+    try {
+      res = await initiateMobilePaymentAction({ purpose, phone, method });
+    } catch {
+      // A throw here used to escape as an unhandled rejection and take the
+      // whole page to the error boundary — a blank "Something went wrong"
+      // instead of a message in this dialog, right after the student pressed
+      // pay. A failed payment must never blank the screen.
+      setBusy(false);
+      setErrorMsg(
+        "We couldn't reach the payment service. No money has left your account — " +
+          "please try again, or contact the office if it keeps happening.",
+      );
+      return;
+    }
     setBusy(false);
     if (!res.success || !res.reference) {
       setErrorMsg(res.error ?? "Could not start the payment.");
@@ -103,10 +113,16 @@ export function MobilePaymentDialog({
   async function payOnline() {
     setWebBusy(true);
     setErrorMsg("");
-    const res = await initiateMobilePaymentAction({
-      purpose,
-      method: "web",
-    });
+    let res;
+    try {
+      res = await initiateMobilePaymentAction({ purpose, method: "web" });
+    } catch {
+      setWebBusy(false);
+      setErrorMsg(
+        "We couldn't reach the payment service. No money has left your account.",
+      );
+      return;
+    }
     if (res.success && res.redirectUrl) {
       window.location.href = res.redirectUrl;
       return; // navigating away
