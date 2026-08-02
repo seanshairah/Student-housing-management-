@@ -36,6 +36,7 @@ import { EmptyState } from "@/components/ui/misc";
 import { PayButton } from "@/components/student/pay-button";
 import { CancelPaymentButton } from "@/components/student/cancel-payment-button";
 import { MobilePaymentDialog } from "@/components/student/mobile-payment-dialog";
+import { looksLikePlaceholderPhone } from "@/services/payments/paynow";
 import { formatCurrency, formatDate, toNumber } from "@/lib/utils";
 import { PAYMENT_STATUS_META, INVOICE_STATUS_META } from "@/constants";
 import { monthlyRentFor, priceFor } from "@/core/billing/pricing";
@@ -75,6 +76,10 @@ export default async function StudentPaymentsPage() {
   ]);
 
   const pending = payments.filter((p) => p.status === PaymentStatus.PENDING);
+  // Only offer a number worth sending a prompt to. A seeded placeholder is
+  // well-formed and unreachable, so pre-filling it makes the wrong number the
+  // default and the payment fails as an unexplained "cancellation".
+  const prefillPhone = looksLikePlaceholderPhone(profile.phone) ? "" : profile.phone;
   // Prices shown here come from the same core pricing the server charges with,
   // so the button can never advertise a different figure from what is billed.
   const monthlyRent = monthlyRentFor(
@@ -169,7 +174,7 @@ export default async function StudentPaymentsPage() {
             triggerIcon={<CalendarClock className="size-4" />}
             triggerClassName="h-auto w-full flex-col items-start gap-1 whitespace-normal py-3 text-left"
             amount={roomPrice}
-            defaultPhone={profile.phone}
+            defaultPhone={prefillPhone}
           />
           <MobilePaymentDialog
             purpose="rent_semester"
@@ -178,7 +183,7 @@ export default async function StudentPaymentsPage() {
             triggerIcon={<CalendarRange className="size-4" />}
             triggerClassName="h-auto w-full flex-col items-start gap-1 whitespace-normal py-3 text-left"
             amount={semesterRent}
-            defaultPhone={profile.phone}
+            defaultPhone={prefillPhone}
           />
           <MobilePaymentDialog
             purpose="transport"
@@ -187,7 +192,7 @@ export default async function StudentPaymentsPage() {
             triggerIcon={<Bus className="size-4" />}
             triggerClassName="h-auto w-full flex-col items-start gap-1 whitespace-normal py-3 text-left"
             amount={transportFee}
-            defaultPhone={profile.phone}
+            defaultPhone={prefillPhone}
           />
         </CardContent>
         {roomPrice <= 0 && (
