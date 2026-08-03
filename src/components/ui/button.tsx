@@ -12,11 +12,17 @@ const buttonVariants = cva(
           "bg-primary text-primary-foreground shadow-sm hover:bg-brand-700 hover:shadow-md",
         destructive:
           "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90",
+        // Every one of these sets its own text colour on purpose. They used to
+        // omit it and inherit from whatever contained them, which is invisible
+        // right up until it isn't: drop one inside a dark panel and you get
+        // white text on a transparent background — a button you can only find
+        // by hovering over where you guessed it was.
         outline:
-          "border border-input bg-transparent hover:bg-accent hover:text-accent-foreground",
+          "border border-input bg-background text-foreground shadow-sm hover:bg-accent hover:text-accent-foreground hover:border-ring/40",
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-accent",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
+          "border border-border bg-secondary text-secondary-foreground shadow-sm hover:bg-accent hover:border-input",
+        ghost:
+          "text-foreground hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
         brand:
           "gradient-brand text-white shadow-md hover:shadow-lg hover:brightness-105",
@@ -35,7 +41,7 @@ const buttonVariants = cva(
       {
         variant: "ghost",
         size: "icon",
-        className: "bg-muted/60 text-muted-foreground",
+        className: "bg-muted/60 text-muted-foreground hover:text-accent-foreground",
       },
     ],
     defaultVariants: { variant: "default", size: "default" },
