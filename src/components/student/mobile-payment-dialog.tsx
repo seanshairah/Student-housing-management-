@@ -203,6 +203,19 @@ export function MobilePaymentDialog({
                 <p className="font-display text-2xl font-bold">
                   {formatCurrency(resolvedAmount)}
                 </p>
+                {/*
+                  Said before the prompt goes out, not after it fails. Mobile
+                  wallets here hold USD and ZWL as separate balances, and this
+                  is collected strictly in USD — so a wallet that plainly has
+                  money in it still refuses the prompt within seconds if the
+                  USD side is short. Paynow confirmed that is what every failed
+                  prompt on this account has been. Naming the balance up front
+                  is the only version of this the student can act on in time.
+                */}
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Comes off your <span className="font-medium">USD</span> wallet
+                  balance — check that one has enough, not the ZWL balance.
+                </p>
               </div>
 
               <div className="space-y-1.5">
