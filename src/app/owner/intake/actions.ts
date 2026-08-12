@@ -8,6 +8,7 @@ import { generateTempPassword } from "@/lib/utils";
 import { UserRole, StudentStatus, RoomStatus } from "@prisma/client";
 import {
   bulkCreateStudents,
+  createStudentAccount,
   sendStudentCredentials,
   type BulkStudentRow,
 } from "@/services/students";
@@ -201,6 +202,88 @@ export async function importMufudziIntake(
       message: `Imported ${result.created.length} students into Mufudzi House${result.skipped.length ? `, skipped ${result.skipped.length}` : ""}. ${sendNow ? "Credentials sent." : "Credentials NOT sent yet — use step 3."}`,
       data: { created: result.created.length, skipped: result.skipped },
     };
+  } catch (e) {
+    return { success: false, error: (e as Error).message };
+  }
+}
+
+/**
+ * Add a single student the same way the bulk intake does: provision a portal
+ * account with a temporary password, optionally assign a house, and (by
+ * default) send login credentials by email + SMS right away. The student then
+ * follows the normal flow — change password on first sign-in, complete the
+ * onboarding wizard.
+ */
+export async function addStudent(formData: FormData): Promise<ActionResult> {
+  await requireRole("OWNER");
+  const fullName = String(formData.get("fullName") || "").trim();
+  const email = String(formData.get("email") || "").toLowerCase().trim();
+  const phone = String(formData.get("phone") || "").trim() || null;
+  const houseId = String(formData.get("houseId") || "").trim() || null;
+  const sendNow = String(formData.get("sendNow") || "") === "on";
+
+  if (!fullName) {
+    return { success: false, error: "Enter the student's full name." };
+  }
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    return { success: false, error: "Enter a valid email address." };
+  }
+
+  try {
+    // A typo'd email must never hijack an owner/caretaker login (the create
+    // routine reuses accounts by email), and duplicates deserve a clear error
+    // rather than a silent password reset.
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing && existing.role !== UserRole.STUDENT) {
+      return {
+        success: false,
+        error: `${email} belongs to a ${existing.role.toLowerCase()} account — use a different email.`,
+      };
+    }
+    if (existing) {
+      return {
+        success: false,
+        error: `A student with ${email} already exists. Resend their credentials from step 3 or the Students page instead.`,
+      };
+    }
+    if (houseId) {
+      const house = await prisma.house.findUnique({ where: { id: houseId } });
+      if (!house) return { success: false, error: "Selected house not found." };
+    }
+
+    const created = await prisma.$transaction(
+      (tx) =>
+        createStudentAccount(
+          { fullName, email, phone, houseId, status: StudentStatus.ACTIVE },
+          tx,
+        ),
+      { maxWait: 10000, timeout: 20000 },
+    );
+
+    let sendMsg = "Credentials not sent yet — use step 3 when ready.";
+    if (sendNow) {
+      const r = await sendStudentCredentials(created.studentProfileId).catch(
+        () => ({ ok: false, email: false, sms: false }),
+      );
+      if (r.ok) {
+        const channels = [r.email && "emailed", r.sms && "texted"].filter(Boolean);
+        sendMsg = `Credentials ${channels.join(" + ")}.`;
+      } else {
+        sendMsg = "Credential delivery failed — resend from step 3.";
+      }
+    }
+
+    await audit({
+      action: "student.added",
+      entityType: "StudentProfile",
+      entityId: created.studentProfileId,
+      metadata: { email, houseId, credentialsSentNow: sendNow },
+    });
+
+    revalidatePath("/owner/intake");
+    revalidatePath("/owner/students");
+    revalidatePath("/owner");
+    return { success: true, message: `${fullName} added. ${sendMsg}` };
   } catch (e) {
     return { success: false, error: (e as Error).message };
   }
