@@ -139,6 +139,18 @@ export async function caretakerAddStudent(
       houseId = room.houseId;
     }
 
+    // The rest of the student's file, captured at creation so the office
+    // never has to chase it later.
+    const details = {
+      nationalId: String(formData.get("nationalId") || "").trim() || null,
+      institution: String(formData.get("institution") || "").trim() || null,
+      program: String(formData.get("program") || "").trim() || null,
+      yearOfStudy: String(formData.get("yearOfStudy") || "").trim() || null,
+      nextOfKinName: String(formData.get("nextOfKinName") || "").trim() || null,
+      nextOfKinPhone: String(formData.get("nextOfKinPhone") || "").trim() || null,
+      nextOfKinRelation: String(formData.get("nextOfKinRelation") || "").trim() || null,
+    };
+
     const created = await prisma.$transaction(async (tx) => {
       const account = await createStudentAccount(
         {
@@ -152,6 +164,10 @@ export async function caretakerAddStudent(
         },
         tx,
       );
+      await tx.studentProfile.update({
+        where: { id: account.studentProfileId },
+        data: details,
+      });
       if (roomId) {
         const room = await tx.room.update({
           where: { id: roomId },
