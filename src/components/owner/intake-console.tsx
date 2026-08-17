@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { UserPlus, Upload, Send, AlertTriangle, Users } from "lucide-react";
+import { UserPlus, Upload, Send, AlertTriangle, Users, CalendarCheck, Megaphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,12 +17,15 @@ import {
 import {
   createAdminAccount,
   importMufudziIntake,
+  importMufudziAugust,
+  sendAugustNotices,
   sendCredentialsBatch,
 } from "@/app/owner/intake/actions";
 import type { ActionResult } from "@/types";
 
 interface Props {
   intakeCount: number;
+  augustCount: number;
   studentCount: number;
   unsentCount: number;
   mufudziExists: boolean;
@@ -30,12 +33,14 @@ interface Props {
 
 export function IntakeConsole({
   intakeCount,
+  augustCount,
   studentCount,
   unsentCount,
   mufudziExists,
 }: Props) {
   const [pending, startTransition] = useTransition();
   const [resetConfirm, setResetConfirm] = useState("");
+  const [augustConfirm, setAugustConfirm] = useState("");
 
   function run(fn: () => Promise<ActionResult>) {
     startTransition(async () => {
@@ -170,6 +175,73 @@ export function IntakeConsole({
             </div>
             <Button type="submit" variant="brand" disabled={pending || studentCount === 0}>
               <Send className="size-4" /> Send credentials
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      {/* 4. August roster + ledger */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CalendarCheck className="size-5" /> 4 · Import August roster &amp; ledger ({augustCount} students)
+          </CardTitle>
+          <CardDescription>
+            Rebuilds Mufudzi from the August book: rooms 1–40 (two sharing,
+            $120), every student placed, and the semester ledger (Aug–Nov)
+            written so each dashboard shows paid in full, paid for the month,
+            or not paid. Replaces earlier imported ledgers; receipts are
+            issued; online-payment history is kept. Safe to click again — it
+            continues where it stopped.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form action={(fd) => run(() => importMufudziAugust(fd))} className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div className="space-y-1.5">
+              <Label htmlFor="august-confirm">Type IMPORT to confirm</Label>
+              <Input
+                id="august-confirm"
+                value={augustConfirm}
+                onChange={(e) => setAugustConfirm(e.target.value)}
+                placeholder="IMPORT"
+                className="sm:w-40"
+              />
+            </div>
+            <input type="hidden" name="confirm" value={augustConfirm} />
+            <Button
+              type="submit"
+              variant="brand"
+              disabled={pending || !mufudziExists || augustConfirm.trim().toUpperCase() !== "IMPORT"}
+            >
+              <CalendarCheck className="size-4" /> Import August roster
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      {/* 5. Roster-update notices */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Megaphone className="size-5" /> 5 · Tell students their records changed
+          </CardTitle>
+          <CardDescription>
+            Messages every active Mufudzi student with contact details on file:
+            records updated, log in to check, reset your password if needed —
+            and, for anyone still owing, how much and to please pay. Skips
+            students with no contact on file.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form action={(fd) => run(() => sendAugustNotices(fd))} className="flex flex-wrap items-center gap-6">
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="viaEmail" defaultChecked className="size-4 rounded border-border" /> Email
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="viaSms" defaultChecked className="size-4 rounded border-border" /> SMS
+            </label>
+            <Button type="submit" variant="brand" disabled={pending}>
+              <Megaphone className="size-4" /> Send notices
             </Button>
           </form>
         </CardContent>

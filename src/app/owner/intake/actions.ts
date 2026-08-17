@@ -249,3 +249,131 @@ export async function sendCredentialsBatch(
     return { success: false, error: (e as Error).message };
   }
 }
+
+/**
+ * Import the August book: rooms 1–40 (two sharing, $120), every student on
+ * the sheet placed and ACTIVE, and each ledger rebuilt so the dashboards
+ * read paid-in-full / paid-for-the-month / not-paid directly. Resumable —
+ * a timed-out run continues from where it stopped on the next click.
+ */
+export async function importMufudziAugust(
+  formData: FormData,
+): Promise<ActionResult> {
+  await requireRole("OWNER");
+  if (String(formData.get("confirm") || "").trim().toUpperCase() !== "IMPORT") {
+    return { success: false, error: "Type IMPORT to confirm." };
+  }
+  try {
+    const { runMufudziAugustImport } = await import("@/services/students/august-import");
+    const s = await runMufudziAugustImport();
+
+    await audit({
+      action: "owner.august_roster_imported",
+      metadata: { ...s },
+    });
+
+    revalidatePath("/owner");
+    revalidatePath("/owner/students");
+    revalidatePath("/owner/rooms");
+    revalidatePath("/owner/payments");
+    revalidatePath("/owner/intake");
+    revalidatePath("/houses");
+
+    return {
+      success: true,
+      message: s.done
+        ? `August roster imported: ${s.rooms} rooms, ${s.processed} students ` +
+          `(${s.created} new, ${s.updated} updated), ${s.receipts} receipts. ` +
+          `Paid in full: ${s.paidInFull} · paid first month: ${s.paidOneMonth} · ` +
+          `partly paid: ${s.partiallyPaid} · not paid: ${s.notPaid}.`
+        : `Import ran out of time after ${s.processed} students — click again to continue (already-done students are skipped).`,
+    };
+  } catch (e) {
+    return { success: false, error: (e as Error).message };
+  }
+}
+
+/**
+ * Tell every student with a real address that their records were updated —
+ * and remind the ones still owing to pay. Placeholder (@unknown.invalid)
+ * addresses are skipped rather than bounced.
+ */
+export async function sendAugustNotices(
+  formData: FormData,
+): Promise<ActionResult> {
+  await requireRole("OWNER");
+  const viaEmail = String(formData.get("viaEmail") || "") === "on";
+  const viaSms = String(formData.get("viaSms") || "") === "on";
+  if (!viaEmail && !viaSms) {
+    return { success: false, error: "Pick at least one channel." };
+  }
+  try {
+    const { NotificationChannel } = await import("@prisma/client");
+    const { sendMessage } = await import("@/services/messaging");
+    const base = (process.env.APP_URL || process.env.NEXTAUTH_URL || "").replace(/\/$/, "");
+
+    const students = await prisma.studentProfile.findMany({
+      where: { status: "ACTIVE", house: { slug: "mufudzi" } },
+      include: {
+        charges: {
+          where: { status: "OUTSTANDING" },
+          select: { amount: true, allocations: { select: { amount: true } } },
+        },
+      },
+    });
+
+    const channels = [
+      ...(viaEmail ? [NotificationChannel.EMAIL] : []),
+      ...(viaSms ? [NotificationChannel.SMS] : []),
+    ];
+
+    let emailSent = 0, smsSent = 0, failed = 0, skippedNoContact = 0;
+    for (const s of students) {
+      const deliverableEmail = !s.email.endsWith("@unknown.invalid");
+      if (!deliverableEmail && !s.phone) { skippedNoContact++; continue; }
+
+      const owing = s.charges.reduce((sum, c) => {
+        const alloc = c.allocations.reduce((a, x) => a + Number(x.amount), 0);
+        return sum + Math.max(0, Number(c.amount) - alloc);
+      }, 0);
+
+      const lines = [
+        `Hi ${s.fullName.split(" ")[0]}, your Mufudzi House records (room, payments, balance) have been updated.`,
+        `Log in at ${base}/auth/login to check they're correct.`,
+        `Forgotten your password? Reset it at ${base}/auth/forgot-password.`,
+      ];
+      if (owing > 0) {
+        lines.splice(1, 0, `Our records show $${owing.toFixed(2)} still outstanding for this semester — please arrange payment.`);
+      }
+
+      const res = await sendMessage({
+        channels,
+        recipients: [{
+          name: s.fullName,
+          email: deliverableEmail ? s.email : "",
+          phone: s.phone,
+        }],
+        subject: "Your housing records have been updated",
+        body: lines.join("\n"),
+      });
+      emailSent += res.emailSent;
+      smsSent += res.smsSent;
+      failed += res.failed;
+    }
+
+    await audit({
+      action: "owner.august_notices_sent",
+      metadata: { students: students.length, emailSent, smsSent, failed, skippedNoContact },
+    });
+
+    return {
+      success: true,
+      message:
+        `${students.length} students — ${emailSent} emails, ${smsSent} SMS delivered` +
+        (failed ? `, ${failed} sends failed (see logs; fix the email domain / SMS sender ID)` : "") +
+        (skippedNoContact ? `, ${skippedNoContact} skipped with no contact on file` : "") + ".",
+    };
+  } catch (e) {
+    return { success: false, error: (e as Error).message };
+  }
+}
