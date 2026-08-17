@@ -21,11 +21,11 @@ import {
   sendAugustNotices,
   sendCredentialsBatch,
 } from "@/app/owner/intake/actions";
-import { MUFUDZI_AUGUST } from "@/data/mufudzi-august";
 import type { ActionResult } from "@/types";
 
 interface Props {
   intakeCount: number;
+  augustCount: number;
   studentCount: number;
   unsentCount: number;
   mufudziExists: boolean;
@@ -33,6 +33,7 @@ interface Props {
 
 export function IntakeConsole({
   intakeCount,
+  augustCount,
   studentCount,
   unsentCount,
   mufudziExists,
@@ -183,7 +184,7 @@ export function IntakeConsole({
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <CalendarCheck className="size-5" /> 4 · Import August roster &amp; ledger ({MUFUDZI_AUGUST.length} students)
+            <CalendarCheck className="size-5" /> 4 · Import August roster &amp; ledger ({augustCount} students)
           </CardTitle>
           <CardDescription>
             Rebuilds Mufudzi from the August book: rooms 1–40 (two sharing,
