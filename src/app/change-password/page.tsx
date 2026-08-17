@@ -1,12 +1,16 @@
 import { ShieldCheck } from "lucide-react";
-import { requireUser } from "@/lib/session";
+import { redirect } from "next/navigation";
+import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ChangePasswordForm } from "@/components/forms/change-password-form";
 
 export const metadata = { title: "Set your password" };
 
 export default async function ChangePasswordPage() {
-  const session = await requireUser();
+  // getSession, deliberately not requireUser(): requireUser redirects every
+  // must-change user to THIS page, so calling it from here would loop.
+  const session = await getSession();
+  if (!session) redirect("/auth/login");
   const user = await prisma.user.findUnique({
     where: { id: session.userId },
     select: { mustChangePassword: true },
