@@ -6,6 +6,9 @@ import { MUFUDZI_INTAKE } from "@/data/mufudzi-intake";
 
 export const metadata = { title: "Student intake" };
 export const dynamic = "force-dynamic";
+// The August import rebuilds 80 ledgers; give the action room beyond the
+// default serverless slice. It is resumable regardless.
+export const maxDuration = 60;
 
 export default async function IntakePage() {
   await requireRole("OWNER");
