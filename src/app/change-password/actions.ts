@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requireUser } from "@/lib/session";
+import { getSession } from "@/lib/auth";
 import {
   hashPassword,
   verifyPassword,
@@ -21,7 +21,10 @@ export async function changePasswordAction(
   _prev: ActionResult | null,
   formData: FormData,
 ): Promise<ActionResult> {
-  const session = await requireUser();
+  // getSession, not requireUser(): the whole point of this action is to be
+  // reachable by a user who is still flagged must-change.
+  const session = await getSession();
+  if (!session) return { success: false, error: "Please sign in again." };
 
   const currentPassword = String(formData.get("currentPassword") || "");
   const newPassword = String(formData.get("newPassword") || "");

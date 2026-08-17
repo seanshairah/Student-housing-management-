@@ -30,7 +30,11 @@ export async function requireUser(): Promise<SessionPayload> {
     select: { isActive: true, mustChangePassword: true },
   });
   if (!user || !user.isActive) redirect("/auth/login");
-  if (user.mustChangePassword) redirect("/auth/change-password");
+  // This platform's forced-change page lives at /change-password — the
+  // /auth/... spelling is the sibling platform's. Sending people there
+  // produced a 404 that read as "the sign-in page is broken": you could log
+  // in, but requireUser() bounced you off a cliff before any page rendered.
+  if (user.mustChangePassword) redirect("/change-password");
 
   return session;
 }
