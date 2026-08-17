@@ -86,6 +86,18 @@ export interface RosterImportSummary {
   done: boolean;
 }
 
+/** Normalised name key for duplicate detection: lowercase, letters only, sorted tokens. */
+export function normaliseName(fullName: string): string {
+  return (fullName || "")
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[^a-z ]/g, "")
+    .trim()
+    .split(/\s+/)
+    .sort()
+    .join(" ");
+}
+
 export function placeholderEmail(fullName: string): string {
   const slug = fullName
     .toLowerCase()
@@ -187,12 +199,28 @@ export async function runRosterImport(
     else if (row.credited < monthly / 2) summary.notPaid++;
     else summary.partiallyPaid++;
 
-    // Find or create the account.
+    // Find or create the account. Email first — but the office books rarely
+    // carry emails, so a returning student would otherwise get a fresh
+    // placeholder account beside the real one they already log in with. When
+    // the email is a generated placeholder, fall back to matching an existing
+    // profile by normalised name, but ONLY when that name is unambiguous in
+    // this house (exactly one match). A wrong merge is worse than a duplicate,
+    // so anything ambiguous still creates a new account and is left for review.
     const user = await prisma.user.findUnique({
       where: { email },
       include: { studentProfile: true },
     });
     let profileId = user?.studentProfile?.id;
+    if (!profileId && email.endsWith("@unknown.invalid")) {
+      const key = normaliseName(row.fullName);
+      const sameName = (
+        await prisma.studentProfile.findMany({
+          where: { houseId: house.id },
+          select: { id: true, fullName: true },
+        })
+      ).filter((p) => normaliseName(p.fullName) === key);
+      if (sameName.length === 1) profileId = sameName[0].id;
+    }
     if (!profileId) {
       const created = await prisma.$transaction(async (tx) => {
         return createStudentAccount(
