@@ -9,10 +9,11 @@ import { UserRole, StudentStatus, RoomStatus } from "@prisma/client";
 import {
   bulkCreateStudents,
   sendStudentCredentials,
+  loginUrl as portalSignInUrl,
   type BulkStudentRow,
 } from "@/services/students";
 import { sendTemplatedEmail } from "@/services/email";
-import { sendStatusSMS } from "@/services/sms";
+import { sendStatusSMS, smsProviderStatus } from "@/services/sms";
 import { EMAIL_SUBJECTS } from "@/constants/messages";
 import { MUFUDZI_INTAKE } from "@/data/mufudzi-intake";
 import { audit } from "@/services/audit";
@@ -376,4 +377,109 @@ export async function sendAugustNotices(
   } catch (e) {
     return { success: false, error: (e as Error).message };
   }
+}
+
+export interface CredentialsBatchResult {
+  sent: number;
+  failed: number;
+  remaining: number;
+  errors: string[];
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * How long to leave a student alone after texting them. Sending ROTATES the
+ * password, so a reminded student still looks "never signed in" — without a
+ * cooldown the same people would be texted again on every run, and the batch
+ * loop would never terminate.
+ */
+const REMINDER_COOLDOWN_HOURS = 6;
+
+/**
+ * Students who were sent a login but have never used it: their account is
+ * still on the temporary password we issued. `phone` must be present — this
+ * reminder goes out by SMS, and roster-imported students with no contact
+ * details on file cannot be reached at all.
+ */
+function notSignedInWhere(cutoff: Date) {
+  return {
+    status: StudentStatus.ACTIVE,
+    id: { not: "test_profile_seed" },
+    phone: { not: "" },
+    user: { role: UserRole.STUDENT, isActive: true, mustChangePassword: true },
+    OR: [{ credentialsSentAt: null }, { credentialsSentAt: { lt: cutoff } }],
+  };
+}
+
+function reminderCutoff(): Date {
+  return new Date(Date.now() - REMINDER_COOLDOWN_HOURS * 60 * 60 * 1000);
+}
+
+/** The sign-in link the SMS will contain, so the owner can sanity-check it. */
+export async function portalLoginUrl(): Promise<string> {
+  await requireRole("OWNER");
+  return portalSignInUrl();
+}
+
+/**
+ * Text a fresh temporary password to students who have never signed in.
+ *
+ * SMS only: they already have the email, and the ones who never opened it are
+ * exactly the ones a second email would not reach. Each send rotates to a new
+ * password so what arrives always works. Batched, because dozens of sends do
+ * not fit in one serverless slice — the client calls this until `remaining`
+ * reaches 0.
+ *
+ * Refuses to run when no SMS provider is configured. The provider falls back
+ * to a mock that reports success, so without this check the dashboard would
+ * cheerfully report "texted 66 students" having sent nothing at all.
+ */
+export async function remindNotSignedInBatchAction(
+  limit = 5,
+): Promise<CredentialsBatchResult> {
+  await requireRole("OWNER");
+
+  if (!smsProviderStatus().configured) {
+    const remaining = await prisma.studentProfile.count({ where: notSignedInWhere(reminderCutoff()) });
+    return {
+      sent: 0,
+      failed: 0,
+      remaining,
+      errors: [
+        "No SMS provider is configured, so nothing was sent. Set SMSPOP_API_KEY and SMSPOP_SENDER_ID, then try again.",
+      ],
+    };
+  }
+
+  const where = notSignedInWhere(reminderCutoff());
+
+  const batch = await prisma.studentProfile.findMany({
+    where,
+    orderBy: { fullName: "asc" },
+    take: Math.min(Math.max(limit, 1), 10),
+    select: { id: true, fullName: true },
+  });
+
+  let sent = 0;
+  let failed = 0;
+  const errors: string[] = [];
+
+  for (let i = 0; i < batch.length; i++) {
+    const s = batch[i];
+    const r = await sendStudentCredentials(s.id, {
+      channels: { email: false, sms: true },
+    });
+    if (r.sms) sent++;
+    else {
+      failed++;
+      errors.push(`${s.fullName}: ${r.error ?? "SMS not delivered"}`);
+    }
+    if (i < batch.length - 1) await sleep(1200); // gentle on the SMS provider
+  }
+
+  const remaining = await prisma.studentProfile.count({ where: notSignedInWhere(reminderCutoff()) });
+
+  revalidatePath("/owner/intake");
+  return { sent, failed, remaining, errors };
 }
