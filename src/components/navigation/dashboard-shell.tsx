@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import * as Icons from "lucide-react";
@@ -52,6 +52,18 @@ export function DashboardShell({
 }: DashboardShellProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // The tab bar fits about five targets. Everything else lives behind "More" —
+  // layouts used to point that at a single page, which left most of the
+  // dashboard (intake, rooms, reports…) unreachable on a phone.
+  const primaryMobile = mobileNav
+    .filter((i) => i.label.toLowerCase() !== "more")
+    .slice(0, 4);
+  const showMore = nav.some((i) => !primaryMobile.some((p) => p.href === i.href));
+
+  // Navigating away should not leave the sheet covering the new page.
+  useEffect(() => setMenuOpen(false), [pathname]);
 
   return (
     <div className="min-h-screen bg-muted/30">
@@ -175,13 +187,67 @@ export function DashboardShell({
         </main>
       </div>
 
+      {/* Mobile "More" sheet — every destination in the dashboard. */}
+      {menuOpen && (
+        <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true">
+          <button
+            type="button"
+            aria-label="Close menu"
+            onClick={() => setMenuOpen(false)}
+            className="absolute inset-0 bg-black/40"
+          />
+          <div className="absolute inset-x-0 bottom-0 max-h-[82vh] overflow-y-auto rounded-t-2xl border-t border-border bg-card p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-border" />
+            <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              All sections
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {nav.map((item) => {
+                const active = isActive(pathname, item.href);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMenuOpen(false)}
+                    className={cn(
+                      "flex items-center gap-2.5 rounded-xl border border-border px-3 py-3 text-sm font-medium transition-colors",
+                      active ? "bg-brand-50 text-brand-700" : "text-foreground",
+                    )}
+                  >
+                    <Icon name={item.icon} className="size-5 shrink-0" />
+                    <span className="truncate">{item.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+            <div className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-3">
+              <Link
+                href="/"
+                onClick={() => setMenuOpen(false)}
+                className="rounded-lg px-3 py-2 text-sm text-muted-foreground"
+              >
+                View public site
+              </Link>
+              <form action={logoutAction}>
+                <button
+                  type="submit"
+                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-rose-600"
+                >
+                  <Icons.LogOut className="size-4" /> Sign out
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Mobile bottom tab bar — native-app style */}
       <nav
         className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-card/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-1px_12px_rgba(0,0,0,0.05)] backdrop-blur supports-[backdrop-filter]:bg-card/85 lg:hidden"
         aria-label="Primary"
       >
         <div className="flex items-stretch justify-around">
-          {mobileNav.map((item) => {
+          {primaryMobile.map((item) => {
             const active = isActive(pathname, item.href);
             return (
               <Link
@@ -205,6 +271,27 @@ export function DashboardShell({
               </Link>
             );
           })}
+          {showMore && (
+            <button
+              type="button"
+              onClick={() => setMenuOpen(true)}
+              aria-expanded={menuOpen}
+              className={cn(
+                "group flex flex-1 flex-col items-center gap-1 pb-1.5 pt-2 text-[11px] font-medium transition-colors",
+                menuOpen ? "text-brand-700" : "text-muted-foreground active:text-foreground",
+              )}
+            >
+              <span
+                className={cn(
+                  "flex h-8 w-12 items-center justify-center rounded-full transition-colors",
+                  menuOpen ? "bg-brand-50" : "bg-transparent group-active:bg-accent",
+                )}
+              >
+                <Icons.Menu className="size-[22px]" />
+              </span>
+              <span className="leading-none">More</span>
+            </button>
+          )}
         </div>
       </nav>
     </div>
